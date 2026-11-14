@@ -8,7 +8,12 @@ final class AIFinanceUITests: XCTestCase {
     override func setUp() {
         continueAfterFailure = false
         app = XCUIApplication()
-        app.launchArguments = ["-demoBackend", "-slowToast", "-AppleLanguages", "(zh-Hant)", "-AppleLocale", "zh_TW"]
+        // -skipCoach：聚光燈引導會蓋住畫面，只有專門測引導的那個測試才打開。
+        // -stillMascot：小白菜靜止，測試才不用一直等動畫停下來。
+        app.launchArguments = [
+            "-demoBackend", "-slowToast", "-skipCoach", "-stillMascot",
+            "-AppleLanguages", "(zh-Hant)", "-AppleLocale", "zh_TW",
+        ]
     }
 
     private func launch(seeded: Bool = false) {
@@ -184,6 +189,63 @@ final class AIFinanceUITests: XCTestCase {
         app.buttons["隱私說明"].tap()
         XCTAssertTrue(app.staticTexts["會傳給 AI 服務的內容"].waitForExistence(timeout: 30))
         shot("14-隱私說明")
+    }
+
+    // MARK: - 聚光燈引導
+
+    /// 說明卡的文字（步數、標題、內文合成一個元素）。
+    private var coachCard: XCUIElement { app.descendants(matching: .any)["coachCardText"] }
+
+    private func waitForCoachStep(_ title: String, timeout: TimeInterval = 40) -> Bool {
+        let predicate = NSPredicate(format: "label CONTAINS %@", title)
+        let expectation = XCTNSPredicateExpectation(predicate: predicate, object: coachCard)
+        return XCTWaiter.wait(for: [expectation], timeout: timeout) == .completed
+    }
+
+    /// 等打字機把內文打完再按，按一下就會前進（打字中按只會先顯示全文）。
+    private func tapCoachNext() {
+        Thread.sleep(forTimeInterval: 5)
+        app.buttons["coachNext"].tap()
+    }
+
+    func testCoachTourAfterFirstEntryAndReplay() {
+        // 引導要等「已記錄」提示條消失才開始，所以這裡不拉長提示條。
+        app.launchArguments.removeAll { $0 == "-slowToast" || $0 == "-skipCoach" }
+        app.launchArguments.append("-forceCoach")
+        launch()
+
+        XCTAssertTrue(app.staticTexts["講一句就記好了"].waitForExistence(timeout: 30))
+        XCTAssertFalse(coachCard.exists, "還沒記第一筆之前不該出現教學")
+
+        type("麥當勞 188")
+        send()
+
+        XCTAssertTrue(waitForCoachStep("這筆記好了"), "記完第一筆、提示條消失後引導要出現")
+        XCTAssertTrue(waitForCoachStep("第 1 步，共 3 步", timeout: 5))
+        shot("18-引導-第一步")
+
+        tapCoachNext()
+        XCTAssertTrue(waitForCoachStep("這個月花了多少"))
+        shot("19-引導-第二步")
+
+        tapCoachNext()
+        XCTAssertTrue(waitForCoachStep("想自己填也行"))
+        shot("20-引導-第三步")
+
+        tapCoachNext()
+        XCTAssertTrue(coachCard.waitForNonExistence(timeout: 30), "最後一步按完引導要結束")
+        XCTAssertTrue(row("麥當勞", "NT$188").exists)
+
+        // 設定頁的「重看教學」可以再跑一次，任何一步都能跳過。
+        app.buttons["settingsButton"].tap()
+        XCTAssertTrue(app.switches["autoCommitToggle"].waitForExistence(timeout: 30))
+        app.swipeUp()
+        XCTAssertTrue(app.buttons["replayCoach"].waitForExistence(timeout: 5))
+        app.buttons["replayCoach"].tap()
+        XCTAssertTrue(waitForCoachStep("這筆記好了"), "重看教學要從第一步開始")
+        app.buttons["coachSkip"].tap()
+        XCTAssertTrue(coachCard.waitForNonExistence(timeout: 30), "跳過教學要立即結束")
+        shot("21-引導-結束之後")
     }
 
     func testDarkModeScreens() {

@@ -13,6 +13,7 @@ enum SettingsKeys {
 /// 設定（規格 7.7）。
 struct SettingsView: View {
     @Environment(TimelineViewModel.self) private var model
+    @Environment(CoachController.self) private var coach
     @Environment(\.dismiss) private var dismiss
 
     @AppStorage(SettingsKeys.autoKeyboard) private var autoKeyboard = true
@@ -126,6 +127,12 @@ struct SettingsView: View {
                 }
 
                 Section {
+                    // 設定頁收起來之後，主畫面會重新跑一次聚光燈引導。
+                    Button("重看教學") {
+                        coach.requestReplay()
+                        dismiss()
+                    }
+                    .accessibilityIdentifier("replayCoach")
                     NavigationLink("隱私說明") { PrivacyView() }
                     LabeledContent("版本", value: Self.version)
                 } header: {

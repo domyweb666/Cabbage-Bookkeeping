@@ -5,6 +5,7 @@ import SwiftUI
 struct TimelineView: View {
     @Environment(TimelineViewModel.self) private var model
     @Environment(SpeechService.self) private var speech
+    @Environment(CoachController.self) private var coach
     @Environment(\.scenePhase) private var scenePhase
 
     @AppStorage(SettingsKeys.autoKeyboard) private var autoKeyboard = true
@@ -61,6 +62,18 @@ struct TimelineView: View {
         .onChange(of: speech.transcript) { _, text in
             if speech.isListening { model.inputText = text }
         }
+        .task(id: coachReady) {
+            guard coachReady else { return }
+            // 先收鍵盤，等畫面停下來再開始，洞才不會跟著鍵盤跑。
+            inputFocused = false
+            try? await Task.sleep(nanoseconds: CoachStyle.startDelayNanoseconds)
+            guard !Task.isCancelled, coachReady else { return }
+            coach.start()
+        }
+        .onChange(of: coach.isActive) { _, active in
+            // 引導結束後把鍵盤還回來，可以接著記下一筆。
+            if !active, autoKeyboard { inputFocused = true }
+        }
         .sheet(item: $editing) { item in
             EditorView(mode: .edit(item))
         }
@@ -83,6 +96,17 @@ struct TimelineView: View {
         }
     }
 
+    // MARK: - 聚光燈引導
+
+    /// 引導可以開始的時機：已經有紀錄（或使用者按了重看教學），而且畫面上沒有別的事在進行。
+    /// 等提示條消失才開始，免得擋住「復原」。
+    private var coachReady: Bool {
+        coach.wantsStart(hasData: !model.transactions.isEmpty)
+            && editing == nil && !showNew && !showOverview && !showSettings && evidence == nil
+            && model.confirmQueue.isEmpty && model.pending.isEmpty && model.toast == nil
+            && model.inputText.isEmpty && !speech.isListening
+    }
+
     // MARK: - 頂部
 
     private var header: some View {
@@ -101,6 +125,7 @@ struct TimelineView: View {
                 }
             }
             .buttonStyle(.plain)
+            .coachTarget("header.monthTotal")
             .accessibilityIdentifier("monthTotal")
             .accessibilityLabel("本月支出 \(Money.format(model.monthExpense))，點一下看本月概覽")
 
@@ -138,32 +163,17 @@ struct TimelineView: View {
     // MARK: - 首次開啟
 
     private var emptyState: some View {
-        VStack(spacing: Theme.spacing(2)) {
-            Spacer()
+        Group {
             if model.isLoading {
                 ProgressView()
             } else {
-                Text("講一句就記好了")
-                    .font(.title3.weight(.semibold))
-                    .foregroundStyle(Theme.primaryText)
-                Text("點一句試試看")
-                    .font(.subheadline)
-                    .foregroundStyle(Theme.secondaryText)
-                ForEach(TimelineViewModel.examples, id: \.self) { example in
-                    Button {
-                        model.useExample(example)
-                        inputFocused = true
-                    } label: {
-                        Text(example)
-                            .font(.body)
-                            .foregroundStyle(Theme.accent)
-                            .frame(maxWidth: .infinity)
-                            .card(padding: Theme.spacing(1.75))
-                    }
-                    .buttonStyle(.plain)
+                // 鍵盤升起時空間很小：放得下就讓小白菜揮手，放不下就縮小，再不行就只留範例句。
+                ViewThatFits(in: .vertical) {
+                    emptyContent(mascotHeight: 150)
+                    emptyContent(mascotHeight: 96)
+                    emptyContent(mascotHeight: nil)
                 }
             }
-            Spacer()
         }
         .padding(.horizontal, Theme.spacing(4))
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -171,10 +181,40 @@ struct TimelineView: View {
         .onTapGesture { inputFocused = false }
     }
 
+    private func emptyContent(mascotHeight: CGFloat?) -> some View {
+        VStack(spacing: Theme.spacing(2)) {
+            if let mascotHeight {
+                MascotView(action: .wave).frame(height: mascotHeight)
+            }
+            Text("講一句就記好了")
+                .font(.title3.weight(.semibold))
+                .foregroundStyle(Theme.primaryText)
+            Text("點一句試試看")
+                .font(.subheadline)
+                .foregroundStyle(Theme.secondaryText)
+            ForEach(TimelineViewModel.examples, id: \.self) { example in
+                Button {
+                    model.useExample(example)
+                    inputFocused = true
+                } label: {
+                    Text(example)
+                        .font(.body)
+                        .foregroundStyle(Theme.accent)
+                        .frame(maxWidth: .infinity)
+                        .card(padding: Theme.spacing(1.75))
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.vertical, Theme.unit)
+    }
+
     // MARK: - 時間軸
 
     private var timeline: some View {
         ScrollViewReader { proxy in
+            // 引導第一步照亮的是最下面（最新）那一筆。
+            let lastRowID = model.sections.last?.items.last?.id
             List {
                 ForEach(model.sections) { section in
                     Section {
@@ -183,6 +223,7 @@ struct TimelineView: View {
                                 if model.isOnline { editing = item }
                             } label: {
                                 TransactionRow(item: item, category: model.category(item.categoryId))
+                                    .coachTarget(item.id == lastRowID ? "timeline.row" : nil)
                             }
                             .buttonStyle(.plain)
                             .swipeActions(edge: .trailing, allowsFullSwipe: true) {
@@ -353,10 +394,14 @@ struct PendingRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.unit) {
             HStack(spacing: Theme.unit) {
-                if entry.state == .sending {
-                    ProgressView().controlSize(.small)
-                } else {
-                    Image(systemName: entry.state == .failed ? "exclamationmark.circle" : "clock")
+                // 整理中小白菜在想，沒記成就抓頭；離線排隊中維持時鐘圖示。
+                switch entry.state {
+                case .sending:
+                    MascotView(action: .think, crop: .bust).frame(width: 36, height: 38)
+                case .failed:
+                    MascotView(action: .oops, crop: .bust).frame(width: 36, height: 38)
+                default:
+                    Image(systemName: "clock")
                 }
                 Text(entry.rawText).lineLimit(2)
                 Spacer()
@@ -473,6 +518,7 @@ struct InputBar: View {
                 .accessibilityHint("長按可以手動新增一筆")
                 .accessibilityAction { if canSend { onSend() } }
                 .accessibilityAction(named: "手動新增") { onManualAdd() }
+                .coachTarget("input.send")
         }
     }
 }

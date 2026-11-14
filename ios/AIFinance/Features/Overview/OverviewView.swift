@@ -31,11 +31,14 @@ struct OverviewView: View {
                     if let overview {
                         totals(overview)
                         if overview.byCategory.isEmpty {
-                            Text("這個月還沒有支出紀錄。")
-                                .font(.subheadline)
-                                .foregroundStyle(Theme.secondaryText)
-                                .frame(maxWidth: .infinity)
-                                .card(padding: Theme.spacing(3))
+                            VStack(spacing: Theme.spacing(1.5)) {
+                                MascotView(action: .shrug).frame(height: 130)
+                                Text("這個月還沒有支出紀錄。")
+                                    .font(.subheadline)
+                                    .foregroundStyle(Theme.secondaryText)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .card(padding: Theme.spacing(3))
                         } else {
                             categoryChart(overview)
                         }
