@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: 後端測試（Deno + 本機 Supabase）
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: 型別檢查
+        run: deno check supabase/functions/record/index.ts supabase/functions/ask/index.ts supabase/tests/*.ts eval/*.ts
+
+      - name: 啟動本機 Supabase
+        run: |
+          printf 'AI_PROVIDER=mock\n' > supabase/functions/.env
+          supabase start
+          supabase status -o env | sed 's/^\([A-Z_]*\)="\(.*\)"$/\1=\2/' >> "$GITHUB_ENV"
+
+      - name: 規則、資料庫、記帳、查帳測試
+        run: deno test --allow-net --allow-env --allow-read supabase/tests
+
+      - name: Edge Function 冒煙測試（HTTP）
+        run: deno run --allow-net --allow-env supabase/tests/smoke.ts
+
+      - name: 失敗時印出 Edge Function 紀錄
+        if: failure()
+        run: docker logs supabase_edge_runtime_cabbage 2>&1 | tail -80 || true
