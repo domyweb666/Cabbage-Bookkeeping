@@ -184,12 +184,22 @@ final class AIFinanceUITests: XCTestCase {
         shot("14-隱私說明")
     }
 
-    func testDarkModeMainScreen() {
-        app.launchArguments += ["-demoSeed"]
-        app.launch()
+    func testDarkModeScreens() {
+        // 先切成深色再開 App，截圖才會是深色的。
         XCUIDevice.shared.appearance = .dark
-        XCTAssertTrue(row("機車維修").waitForExistence(timeout: 10))
-        shot("15-深色模式")
-        XCUIDevice.shared.appearance = .light
+        addTeardownBlock { XCUIDevice.shared.appearance = .light }
+        launch(seeded: true)
+        XCTAssertTrue(row("便當").waitForExistence(timeout: 10))
+        shot("15-深色-主畫面")
+
+        type("買電腦 45000")
+        send()
+        XCTAssertTrue(app.buttons["confirmAll"].waitForExistence(timeout: 10))
+        shot("16-深色-確認卡")
+        app.buttons["confirmCancel"].tap()
+
+        app.buttons["monthTotal"].tap()
+        XCTAssertTrue(app.staticTexts["支出分類"].waitForExistence(timeout: 10))
+        shot("17-深色-概覽")
     }
 }
