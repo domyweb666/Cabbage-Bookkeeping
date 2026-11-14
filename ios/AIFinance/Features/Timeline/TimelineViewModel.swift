@@ -284,6 +284,15 @@ final class TimelineViewModel {
         entryRepository.removeAnswer(card.id)
     }
 
+    /// 手機上有沒有還沒備份的東西（決定用 Apple ID 登入時能不能直接換成舊帳號）。
+    var hasLocalData: Bool { !transactions.isEmpty || !pending.isEmpty }
+
+    /// 換成另一個帳號之後（用 Apple ID 取回舊資料），整個重新同步。
+    func reloadAfterAccountSwitch() async {
+        resetAfterWipe()
+        await refresh()
+    }
+
     /// 刪除所有資料之後，清空畫面上的狀態。
     func resetAfterWipe() {
         transactions = []

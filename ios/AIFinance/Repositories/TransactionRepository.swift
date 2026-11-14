@@ -83,8 +83,12 @@ final class TransactionRepository {
         get async { await backend.isLinked }
     }
 
-    func linkApple(idToken: String, rawNonce: String) async throws {
-        try await backend.linkApple(idToken: idToken, rawNonce: rawNonce)
+    /// 用 Apple ID 備份。回傳 true 代表換成了原本就綁著這個 Apple ID 的帳號，
+    /// 這時手機上的快取已經清空，呼叫端要重新同步。
+    func linkApple(idToken: String, rawNonce: String, allowSwitch: Bool) async throws -> Bool {
+        let switched = try await backend.linkApple(idToken: idToken, rawNonce: rawNonce, allowSwitch: allowSwitch)
+        if switched { store.wipe() }
+        return switched
     }
 
     /// 匯出 CSV，回傳暫存檔的位置（交給系統的分享面板）。

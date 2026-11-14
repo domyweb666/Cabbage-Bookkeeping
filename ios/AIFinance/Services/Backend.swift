@@ -78,5 +78,9 @@ protocol Backend: AnyObject {
     func updateProfile(_ profile: Profile) async throws
 
     func deleteAllData() async throws
-    func linkApple(idToken: String, rawNonce: String) async throws
+    /// 用 Apple ID 備份。
+    /// 這個 Apple ID 還沒用過：掛到目前的匿名帳號上，回傳 false。
+    /// 已經綁過另一個帳號（換手機、重裝）：allowSwitch 為 true 時改成登入那個帳號，回傳 true；
+    /// 為 false 時丟出 code 為 apple_already_linked 的錯誤，由畫面提醒使用者手機上還有沒備份的資料。
+    func linkApple(idToken: String, rawNonce: String, allowSwitch: Bool) async throws -> Bool
 }

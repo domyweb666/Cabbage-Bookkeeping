@@ -84,8 +84,8 @@ actor SupabaseBackend: Backend {
                         body: ["refresh_token": current.refreshToken], bearer: nil
                     )
                 } catch let error as BackendError where !error.isNetwork {
-                    // refresh token 失效。匿名帳號沒辦法找回，只能重新開始；已綁定的帳號請使用者重新登入。
-                    if !current.isAnonymous { throw BackendError.server(code: "session_expired", message: "登入已過期，請到設定重新用 Apple ID 登入。") }
+                    // 登入狀態失效，換不了新的。往下重新匿名登入；
+                    // 原本綁過 Apple ID 的人，到設定再按一次「透過 Apple 繼續」就能取回資料。
                 }
             }
             return try await self.authRequest(path: "auth/v1/signup", query: [], body: [:], bearer: nil)
@@ -104,15 +104,29 @@ actor SupabaseBackend: Backend {
         }
     }
 
-    func linkApple(idToken: String, rawNonce: String) async throws {
+    func linkApple(idToken: String, rawNonce: String, allowSwitch: Bool) async throws -> Bool {
         let current = try await validSession()
-        // 把 Apple 身分掛到目前的匿名帳號上，資料不用搬。
-        _ = try await authRequest(
-            path: "auth/v1/token",
-            query: [URLQueryItem(name: "grant_type", value: "id_token")],
-            body: ["provider": "apple", "id_token": idToken, "nonce": rawNonce, "link_identity": true],
-            bearer: current.accessToken
-        )
+        let query = [URLQueryItem(name: "grant_type", value: "id_token")]
+        do {
+            // 把 Apple 身分掛到目前的匿名帳號上，資料不用搬。
+            _ = try await authRequest(
+                path: "auth/v1/token", query: query,
+                body: ["provider": "apple", "id_token": idToken, "nonce": rawNonce, "link_identity": true],
+                bearer: current.accessToken
+            )
+            return false
+        } catch let error as BackendError where !error.isNetwork {
+            // 掛不上去，多半是這個 Apple ID 已經綁過另一個帳號（換手機或重裝）。
+            guard allowSwitch else {
+                throw BackendError.server(code: "apple_already_linked", message: "這個 Apple ID 已經有一份備份了。")
+            }
+            // 改成直接登入那個帳號，取回原本的資料。
+            _ = try await authRequest(
+                path: "auth/v1/token", query: query,
+                body: ["provider": "apple", "id_token": idToken, "nonce": rawNonce], bearer: nil
+            )
+            return true
+        }
     }
 
     // MARK: - HTTP

@@ -212,5 +212,8 @@ actor MockBackend: Backend {
         profile = Profile()
     }
 
-    func linkApple(idToken: String, rawNonce: String) async throws { linked = true }
+    func linkApple(idToken: String, rawNonce: String, allowSwitch: Bool) async throws -> Bool {
+        linked = true
+        return false
+    }
 }

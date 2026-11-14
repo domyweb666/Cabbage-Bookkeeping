@@ -1,0 +1,107 @@
+name: TestFlight
+
+# 推到 main 或手動觸發時，建置正式版並上傳 TestFlight。
+# 需要的 repository secrets 見 docs/SETUP.md。缺任何一個就整個略過，不會失敗。
+on:
+  push:
+    branches: [main]
+    paths: ["ios/**", ".github/workflows/testflight.yml"]
+  workflow_dispatch:
+
+concurrency:
+  group: testflight
+  cancel-in-progress: false
+
+jobs:
+  upload:
+    name: 建置並上傳 TestFlight
+    runs-on: macos-15
+    timeout-minutes: 60
+    env:
+      ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+      ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+      ASC_KEY_P8_BASE64: ${{ secrets.ASC_KEY_P8_BASE64 }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      SUPABASE_HOST: ${{ secrets.SUPABASE_HOST }}
+      SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+    steps:
+      - name: 檢查金鑰是否齊全
+        id: check
+        run: |
+          missing=""
+          for name in ASC_KEY_ID ASC_ISSUER_ID ASC_KEY_P8_BASE64 APPLE_TEAM_ID SUPABASE_HOST SUPABASE_ANON_KEY; do
+            if [ -z "${!name}" ]; then missing="$missing $name"; fi
+          done
+          if [ -n "$missing" ]; then
+            echo "::warning::缺少 secrets：$missing。略過 TestFlight 上傳。"
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.check.outputs.ready == 'true'
+
+      - name: 產生 Xcode 專案
+        if: steps.check.outputs.ready == 'true'
+        run: |
+          brew install xcodegen
+          cd ios && xcodegen generate
+
+      - name: 準備 App Store Connect API 金鑰
+        if: steps.check.outputs.ready == 'true'
+        run: |
+          mkdir -p "$RUNNER_TEMP/asc"
+          echo "$ASC_KEY_P8_BASE64" | base64 --decode > "$RUNNER_TEMP/asc/AuthKey_${ASC_KEY_ID}.p8"
+
+      - name: 封存
+        if: steps.check.outputs.ready == 'true'
+        run: |
+          set -o pipefail
+          cd ios
+          xcodebuild archive \
+            -project AIFinance.xcodeproj -scheme AIFinance -configuration Release \
+            -destination "generic/platform=iOS" \
+            -archivePath build/AIFinance.xcarchive \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$RUNNER_TEMP/asc/AuthKey_${ASC_KEY_ID}.p8" \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
+            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
+            CODE_SIGN_STYLE=Automatic \
+            CURRENT_PROJECT_VERSION="${{ github.run_number }}" \
+            SUPABASE_HOST="$SUPABASE_HOST" \
+            SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY" \
+            2>&1 | tee archive.log | grep -E "error:|\*\* " | tail -40
+
+      - name: 上傳 TestFlight
+        if: steps.check.outputs.ready == 'true'
+        run: |
+          set -o pipefail
+          cd ios
+          cat > build/ExportOptions.plist <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>destination</key><string>upload</string>
+            <key>teamID</key><string>${APPLE_TEAM_ID}</string>
+            <key>signingStyle</key><string>automatic</string>
+            <key>uploadSymbols</key><true/>
+          </dict>
+          </plist>
+          EOF
+          xcodebuild -exportArchive \
+            -archivePath build/AIFinance.xcarchive \
+            -exportOptionsPlist build/ExportOptions.plist \
+            -exportPath build/export \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$RUNNER_TEMP/asc/AuthKey_${ASC_KEY_ID}.p8" \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
+            2>&1 | tee export.log | grep -E "error:|\*\* |Upload" | tail -40
+
+      - name: 清掉金鑰
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/asc"

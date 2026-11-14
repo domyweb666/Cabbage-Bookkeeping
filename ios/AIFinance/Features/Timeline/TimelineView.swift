@@ -244,12 +244,14 @@ struct TimelineView: View {
             .listStyle(.insetGrouped)
             .scrollContentBackground(.hidden)
             .scrollDismissesKeyboard(.interactively)
+            .defaultScrollAnchor(.bottom)
             .onAppear { proxy.scrollTo("bottom", anchor: .bottom) }
             .onChange(of: model.transactions.count + model.pending.count + model.answers.count) { _, _ in
                 withAnimation { proxy.scrollTo("bottom", anchor: .bottom) }
             }
-            .onChange(of: inputFocused) { _, focused in
-                if focused { withAnimation { proxy.scrollTo("bottom", anchor: .bottom) } }
+            // 鍵盤升起後清單變矮，要等它升完再捲一次，最新的幾筆才不會被擋住。
+            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardDidShowNotification)) { _ in
+                withAnimation { proxy.scrollTo("bottom", anchor: .bottom) }
             }
         }
     }

@@ -215,13 +215,23 @@ struct SettingsView: View {
             return
         }
         let nonce = rawNonce
+        // 手機上已經有紀錄時，不直接換成舊帳號，免得這些紀錄看起來像不見了。
+        let allowSwitch = !model.hasLocalData
         Task {
             do {
-                try await repository.linkApple(idToken: idToken, rawNonce: nonce)
+                let switched = try await repository.linkApple(idToken: idToken, rawNonce: nonce, allowSwitch: allowSwitch)
                 isLinked = true
-                message = "綁定完成。"
+                if switched {
+                    await model.reloadAfterAccountSwitch()
+                    if let loaded = try? await repository.profile() { profile = loaded }
+                    message = "已經取回這個 Apple ID 的資料。"
+                } else {
+                    message = "綁定完成。"
+                }
+            } catch BackendError.server(let code, _) where code == "apple_already_linked" {
+                message = "這個 Apple ID 已經有一份備份了，但這支手機上還有新記的紀錄。想換回那份備份的話，先匯出 CSV，再刪除所有資料，然後重新按一次。"
             } catch let error as BackendError {
-                message = error.isNetwork ? error.message : "綁定沒有成功。這個 Apple ID 可能已經綁過另一份資料。"
+                message = error.message
             } catch {
                 message = "綁定沒有成功，請稍後再試。"
             }
