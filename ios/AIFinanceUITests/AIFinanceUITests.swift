@@ -187,9 +187,8 @@ final class AIFinanceUITests: XCTestCase {
     }
 
     func testDarkModeScreens() {
-        // 先切成深色再開 App，截圖才會是深色的。
-        XCUIDevice.shared.appearance = .dark
-        addTeardownBlock { XCUIDevice.shared.appearance = .light }
+        // 模擬器的外觀設定在 CI 上切不動，改由 App 的啟動參數強制深色。
+        app.launchArguments.append("-forceDark")
         launch(seeded: true)
         XCTAssertTrue(row("便當").waitForExistence(timeout: 10))
         shot("15-深色-主畫面")

@@ -12,6 +12,8 @@ struct AppConfig {
     let supabase: Supabase?
     /// 示範模式是否預先放幾筆資料（畫面測試用）。
     let seedDemoData: Bool
+    /// 強制用深色外觀（畫面測試用，啟動參數 -forceDark）。
+    var forceDark: Bool { ProcessInfo.processInfo.arguments.contains("-forceDark") }
 
     static let current: AppConfig = {
         let arguments = ProcessInfo.processInfo.arguments

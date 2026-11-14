@@ -29,6 +29,7 @@ struct AIFinanceApp: App {
                 .environment(model)
                 .environment(speech)
                 .tint(Theme.accent)
+                .preferredColorScheme(AppConfig.current.forceDark ? .dark : nil)
                 .onAppear {
                     model.connectivityChanged(online: network.isOnline)
                     network.observe { online in model.connectivityChanged(online: online) }
