@@ -47,7 +47,8 @@ final class TimelineViewModel {
     @ObservationIgnored private var started = false
 
     static let examples = ["麥當勞 188", "早餐 65，午餐便當 120", "這個月花多少？"]
-    static let toastSeconds: UInt64 = 5
+    /// 提示條停留 5 秒（規格 7.2）。畫面測試用啟動參數 -slowToast 拉長，CI 的模擬器很慢時才按得到復原。
+    static let toastSeconds: UInt64 = ProcessInfo.processInfo.arguments.contains("-slowToast") ? 60 : 5
 
     init(transactionRepository: TransactionRepository, entryRepository: EntryRepository) {
         self.transactionRepository = transactionRepository
