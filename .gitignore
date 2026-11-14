@@ -1,0 +1,32 @@
+# 金鑰與本機環境
+.env
+.env.*
+!.env.example
+*.p8
+*.p12
+*.mobileprovision
+ios/AIFinance/App/Secrets.xcconfig
+
+# Supabase 本機
+supabase/.branches/
+supabase/.temp/
+supabase/snippets/
+
+# Xcode（專案檔由 XcodeGen 產生，不進版控）
+ios/*.xcodeproj/
+ios/build/
+ios/DerivedData/
+*.xcuserstate
+xcuserdata/
+.build/
+.swiftpm/
+*.xcresult
+
+# 其他
+.DS_Store
+node_modules/
+eval/results/
+
+# XcodeGen 產生的檔案
+ios/AIFinance/Resources/Info.plist
+ios/AIFinance/Resources/AIFinance.entitlements
