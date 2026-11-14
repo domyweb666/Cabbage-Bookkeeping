@@ -40,8 +40,9 @@ dbTest("註冊時自動建立 profile，預設 TWD、台北時區、直接入帳
   const { data } = await a.db.from("profiles").select("currency, timezone, auto_commit").single();
   assertEquals(data, { currency: "TWD", timezone: "Asia/Taipei", auto_commit: true });
 
-  // 只能改 auto_commit。
-  assertEquals((await a.db.from("profiles").update({ auto_commit: false }).eq("id", a.id)).error, null);
+  // 只能改直接入帳的開關與門檻。
+  assertEquals((await a.db.from("profiles").update({ auto_commit: false, auto_commit_max: 3000 }).eq("id", a.id)).error, null);
+  assertNotEquals((await a.db.from("profiles").update({ auto_commit_max: 0 }).eq("id", a.id)).error, null);
   assertNotEquals((await a.db.from("profiles").update({ currency: "USD" }).eq("id", a.id)).error, null);
 });
 

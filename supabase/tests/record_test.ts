@@ -197,6 +197,18 @@ dbTest("關閉直接入帳後，每筆都先確認", async () => {
   assertEquals(r.drafts[0].reasons, ["已關閉直接入帳"]);
 });
 
+dbTest("使用者把門檻調低後，超過自訂門檻就要確認；調高不會超過伺服器上限", async () => {
+  const u = await newUser();
+  await u.db.from("profiles").update({ auto_commit_max: 1000 }).eq("id", u.id);
+  const r = await run(u, "1,280 買衣服") as { result: string; drafts: Draft[] };
+  assertEquals(r.result, "needs_confirm");
+  assertEquals(r.drafts[0].reasons, ["金額超過 1,000"]);
+
+  await u.db.from("profiles").update({ auto_commit_max: 999999 }).eq("id", u.id);
+  const big = await run(u, "買電腦 45000") as { result: string; drafts: Draft[] };
+  assertEquals(big.drafts[0].reasons, ["金額超過 10,000"]);
+});
+
 dbTest("確認草稿：後端再驗證後寫入；改過分類會學成規則，下次同商家自動套用", async () => {
   const u = await newUser();
   const cats = await categories(u.db);

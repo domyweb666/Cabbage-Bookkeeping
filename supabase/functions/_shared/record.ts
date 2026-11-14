@@ -146,7 +146,8 @@ export async function handleRecord(body: unknown, ctx: Ctx): Promise<RecordResul
         rawText: input.raw_text,
         today,
         autoCommitEnabled: profile.auto_commit,
-        autoCommitMax: ctx.config.autoCommitMax,
+        // 使用者可以把門檻調低；伺服器的 AUTO_COMMIT_MAX 是上限。
+        autoCommitMax: Math.min(profile.auto_commit_max ?? ctx.config.autoCommitMax, ctx.config.autoCommitMax),
       });
 
       if (reasons.every((r) => r.length === 0)) {

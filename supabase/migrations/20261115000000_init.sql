@@ -9,6 +9,8 @@ create table public.profiles (
   currency text not null default 'TWD',
   timezone text not null default 'Asia/Taipei',
   auto_commit boolean not null default true,
+  -- 使用者自訂的直接入帳門檻；空值代表用伺服器預設（AUTO_COMMIT_MAX）。不會高於伺服器上限。
+  auto_commit_max bigint check (auto_commit_max between 1 and 1000000),
   created_at timestamptz not null default now()
 );
 
@@ -20,9 +22,9 @@ create policy profiles_update_own on public.profiles
   for update to authenticated using (id = (select auth.uid()))
   with check (id = (select auth.uid()));
 
--- 使用者只能改 auto_commit，貨幣與時區在 MVP 固定。
+-- 使用者只能改直接入帳的開關與門檻，貨幣與時區在 MVP 固定。
 revoke update on public.profiles from authenticated;
-grant update (auto_commit) on public.profiles to authenticated;
+grant update (auto_commit, auto_commit_max) on public.profiles to authenticated;
 
 create function public.handle_new_user() returns trigger
 language plpgsql security definer set search_path = '' as $$
@@ -116,7 +118,8 @@ create trigger entries_guard before update on public.entries
 -- ───────────────────────── transactions ─────────────────────────
 create table public.transactions (
   id uuid primary key default gen_random_uuid(),
-  user_id uuid not null references auth.users (id) on delete cascade,
+  -- 預設填入呼叫者本人；RLS 另外擋掉寫到別人名下。
+  user_id uuid not null default auth.uid() references auth.users (id) on delete cascade,
   entry_id uuid references public.entries (id) on delete set null,
   type text not null check (type in ('expense', 'income')),
   amount bigint not null check (amount > 0),
@@ -437,7 +440,7 @@ begin
   delete from public.entries where user_id = uid;
   delete from public.user_rules where user_id = uid;
   delete from public.ai_usage where user_id = uid;
-  update public.profiles set auto_commit = true where id = uid;
+  update public.profiles set auto_commit = true, auto_commit_max = null where id = uid;
 end;
 $$;
 

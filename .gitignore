@@ -26,3 +26,7 @@ xcuserdata/
 .DS_Store
 node_modules/
 eval/results/
+
+# XcodeGen 產生的檔案
+ios/AIFinance/Resources/Info.plist
+ios/AIFinance/Resources/AIFinance.entitlements

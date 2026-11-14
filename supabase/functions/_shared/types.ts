@@ -41,6 +41,7 @@ export interface Profile {
   currency: string;
   timezone: string;
   auto_commit: boolean;
+  auto_commit_max: number | null;
 }
 
 /** 等使用者確認的草稿。 */

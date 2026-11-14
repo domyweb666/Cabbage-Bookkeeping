@@ -16,11 +16,11 @@ export interface Ctx {
 }
 
 export async function loadProfile(ctx: Ctx): Promise<Profile> {
-  const { data, error } = await ctx.db.from("profiles").select("id, currency, timezone, auto_commit")
+  const { data, error } = await ctx.db.from("profiles").select("id, currency, timezone, auto_commit, auto_commit_max")
     .eq("id", ctx.userId).maybeSingle();
   if (error) throw new AppError(500, "db_error", "讀取設定失敗，請稍後再試");
   // 理論上註冊時就會建立；保險起見沒有就用預設值。
-  return data ?? { id: ctx.userId, currency: "TWD", timezone: "Asia/Taipei", auto_commit: true };
+  return data ?? { id: ctx.userId, currency: "TWD", timezone: "Asia/Taipei", auto_commit: true, auto_commit_max: null };
 }
 
 export async function loadCategories(ctx: Ctx): Promise<Category[]> {
