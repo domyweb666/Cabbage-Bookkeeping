@@ -83,7 +83,9 @@ final class AIFinanceUITests: XCTestCase {
         send()
         XCTAssertTrue(app.staticTexts["已記錄 NT$500"].waitForExistence(timeout: 10))
         XCTAssertTrue(waitForMonthTotal("NT$685"))
-        XCTAssertTrue(app.staticTexts["昨天"].exists)
+        // 新的一筆進來時清單會捲動，等它停下來再找標題。
+        XCTAssertTrue(app.staticTexts["昨天"].waitForExistence(timeout: 10))
+        XCTAssertTrue(row("加油", "NT$500").waitForExistence(timeout: 5))
         shot("03-連續記帳")
 
         app.buttons["undoButton"].tap()

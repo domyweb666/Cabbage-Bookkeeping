@@ -1,8 +1,9 @@
 name: CI
 
 on:
+  # 分支的推送由 pull_request 觸發，避免同一個 commit 跑兩次。
   push:
-    branches: ["**"]
+    branches: [main]
   pull_request:
   workflow_dispatch:
 
