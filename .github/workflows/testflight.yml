@@ -1,109 +1,144 @@
 name: TestFlight
 
-# 推到 main 或手動觸發時，建置正式版並上傳 TestFlight。
-# 需要的 repository secrets 見 docs/SETUP.md。缺任何一個就整個略過，不會失敗。
+# 多米開口才出版：只有手動觸發，只准 main。
+#   gh workflow run testflight.yml --ref main
+# 手動簽章：用帳號共用的那張 Apple Distribution 憑證，加上每次向 Apple 申請的描述檔。
+# 不走自動簽章，因為每跑一次會多一張開發憑證，累積到上限別的 app 也簽不了（準則 2-19、2-22）。
+# 六個 secret 的名字和放法看 docs/上架指南.md 步驟 7，缺一個就紅。
+# build 號是這支 workflow 的 run_number。檔名不要改，改了號碼會從 1 重算。
+# repo 公開，紀錄誰都看得到：secret 只進用得到的那一步，完整的 xcodebuild 輸出不上傳。
 on:
-  push:
-    branches: [main]
-    paths: ["ios/**", ".github/workflows/testflight.yml"]
   workflow_dispatch:
+
+permissions:
+  contents: read
 
 concurrency:
   group: testflight
   cancel-in-progress: false
 
 jobs:
+  ready:
+    name: 檢查分支與 secret
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      # 只傳「有沒有」進去，值不會出現在這個工作裡
+      - name: 只准 main，六個 secret 都要在
+        env:
+          HAS_APPLE_DIST_P12_BASE64: ${{ secrets.APPLE_DIST_P12_BASE64 != '' }}
+          HAS_APPLE_DIST_P12_PASSWORD: ${{ secrets.APPLE_DIST_P12_PASSWORD != '' }}
+          HAS_APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID != '' }}
+          HAS_ASC_KEY_ID: ${{ secrets.ASC_KEY_ID != '' }}
+          HAS_ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID != '' }}
+          HAS_ASC_KEY_P8_BASE64: ${{ secrets.ASC_KEY_P8_BASE64 != '' }}
+        run: bash ios/ci/require_ready.sh
+
   upload:
-    name: 建置並上傳 TestFlight
+    name: 測試、打包、上傳 TestFlight
+    needs: ready
     runs-on: macos-26
     timeout-minutes: 60
     env:
-      ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
-      ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
-      ASC_KEY_P8_BASE64: ${{ secrets.ASC_KEY_P8_BASE64 }}
-      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      BUILD_NUMBER: ${{ github.run_number }}
     steps:
-      - name: 檢查金鑰是否齊全
-        id: check
-        run: |
-          missing=""
-          for name in ASC_KEY_ID ASC_ISSUER_ID ASC_KEY_P8_BASE64 APPLE_TEAM_ID; do
-            if [ -z "${!name}" ]; then missing="$missing $name"; fi
-          done
-          if [ -n "$missing" ]; then
-            echo "::warning::缺少 secrets：$missing。略過 TestFlight 上傳。"
-            echo "ready=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "ready=true" >> "$GITHUB_OUTPUT"
-          fi
-
       - uses: actions/checkout@v4
-        if: steps.check.outputs.ready == 'true'
+        with:
+          persist-credentials: false
 
-      - name: 選 Xcode 26
-        if: steps.check.outputs.ready == 'true'
-        run: |
-          XCODE_APP="$(ls -d /Applications/Xcode_26*.app | sort -V | tail -1)"
-          sudo xcode-select -s "$XCODE_APP"
+      - name: 選正式版 Xcode 26
+        run: bash ios/ci/select_xcode.sh
 
-      - name: 產生 Xcode 專案
-        if: steps.check.outputs.ready == 'true'
+      - name: FinanceCore 單元測試
+        run: swift test --package-path ios/Packages/FinanceCore
+
+      - name: 產生 Xcode 專案，抓套件
         run: |
+          set -euo pipefail
           brew install xcodegen
-          cd ios && xcodegen generate
-
-      - name: 準備 App Store Connect API 金鑰
-        if: steps.check.outputs.ready == 'true'
-        run: |
-          mkdir -p "$RUNNER_TEMP/asc"
-          echo "$ASC_KEY_P8_BASE64" | base64 --decode > "$RUNNER_TEMP/asc/AuthKey_${ASC_KEY_ID}.p8"
-
-      - name: 封存
-        if: steps.check.outputs.ready == 'true'
-        run: |
-          set -o pipefail
           cd ios
-          xcodebuild archive \
-            -project AIFinance.xcodeproj -scheme AIFinance -configuration Release \
+          xcodegen generate
+          xcodebuild -resolvePackageDependencies -project AIFinance.xcodeproj -scheme AIFinance
+
+      # 簽章用的東西全放這一個資料夾，最後一步整個刪掉
+      - name: 建暫存資料夾
+        run: |
+          set -euo pipefail
+          SIGN_DIR="$RUNNER_TEMP/baicai-sign"
+          mkdir -m 700 "$SIGN_DIR"
+          {
+            echo "SIGN_DIR=$SIGN_DIR"
+            echo "ASC_KEY_P8_PATH=$SIGN_DIR/AuthKey.p8"
+          } >> "$GITHUB_ENV"
+
+      - name: 還原 API 金鑰並驗格式
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_P8_BASE64: ${{ secrets.ASC_KEY_P8_BASE64 }}
+        run: bash ios/ci/restore_asc_key.sh "$ASC_KEY_P8_PATH"
+
+      - name: 還原發佈憑證到暫時鑰匙圈
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_DIST_P12_BASE64: ${{ secrets.APPLE_DIST_P12_BASE64 }}
+          APPLE_DIST_P12_PASSWORD: ${{ secrets.APPLE_DIST_P12_PASSWORD }}
+        run: bash ios/ci/import_dist_cert.sh
+
+      - name: 問 Apple 金鑰、app 記錄、build 號
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: node ios/ci/asc_preflight.mjs
+
+      - name: 向 Apple 申請上架用描述檔
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: node ios/ci/appstore_profile.mjs
+
+      # 指令列只帶 Team 和 build 號。簽章方式與描述檔寫在 project.yml 的 app target，
+      # 不可以搬到這裡：指令列的設定會套到 FinanceCore、VeggieKit，套件不吃描述檔，會整個失敗。
+      - name: archive
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          bash ios/ci/run_logged.sh archive \
+            xcodebuild archive \
+            -project ios/AIFinance.xcodeproj \
+            -scheme AIFinance \
+            -configuration Release \
             -destination "generic/platform=iOS" \
-            -archivePath build/AIFinance.xcarchive \
-            -allowProvisioningUpdates \
-            -authenticationKeyPath "$RUNNER_TEMP/asc/AuthKey_${ASC_KEY_ID}.p8" \
-            -authenticationKeyID "$ASC_KEY_ID" \
-            -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
+            -archivePath "$SIGN_DIR/AIFinance.xcarchive" \
             DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
-            CODE_SIGN_STYLE=Automatic \
-            CURRENT_PROJECT_VERSION="${{ github.run_number }}" \
-            2>&1 | tee archive.log | grep -E "error:|\*\* " | tail -40
+            CURRENT_PROJECT_VERSION="$BUILD_NUMBER"
 
-      - name: 上傳 TestFlight
-        if: steps.check.outputs.ready == 'true'
+      - name: 上傳 App Store Connect
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
         run: |
-          set -o pipefail
-          cd ios
-          cat > build/ExportOptions.plist <<EOF
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-            <key>method</key><string>app-store-connect</string>
-            <key>destination</key><string>upload</string>
-            <key>teamID</key><string>${APPLE_TEAM_ID}</string>
-            <key>signingStyle</key><string>automatic</string>
-            <key>uploadSymbols</key><true/>
-          </dict>
-          </plist>
-          EOF
-          xcodebuild -exportArchive \
-            -archivePath build/AIFinance.xcarchive \
-            -exportOptionsPlist build/ExportOptions.plist \
-            -exportPath build/export \
+          set -euo pipefail
+          cp ios/ci/ExportOptions.plist "$SIGN_DIR/ExportOptions.plist"
+          plutil -replace teamID -string "$APPLE_TEAM_ID" "$SIGN_DIR/ExportOptions.plist"
+          bash ios/ci/run_logged.sh upload \
+            xcodebuild -exportArchive \
+            -archivePath "$SIGN_DIR/AIFinance.xcarchive" \
+            -exportOptionsPlist "$SIGN_DIR/ExportOptions.plist" \
+            -exportPath "$SIGN_DIR/export" \
             -allowProvisioningUpdates \
-            -authenticationKeyPath "$RUNNER_TEMP/asc/AuthKey_${ASC_KEY_ID}.p8" \
+            -authenticationKeyPath "$ASC_KEY_P8_PATH" \
             -authenticationKeyID "$ASC_KEY_ID" \
-            -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
-            2>&1 | tee export.log | grep -E "error:|\*\* |Upload" | tail -40
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID"
+          echo "build $BUILD_NUMBER 傳上去了。Apple 還要處理，大約 5 到 15 分鐘。" >> "$GITHUB_STEP_SUMMARY"
 
-      - name: 清掉金鑰
+      - name: 刪鑰匙圈與金鑰檔（不管成敗）
         if: always()
-        run: rm -rf "$RUNNER_TEMP/asc"
+        run: bash ios/ci/cleanup_signing.sh
