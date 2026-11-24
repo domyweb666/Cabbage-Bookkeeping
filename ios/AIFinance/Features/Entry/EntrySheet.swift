@@ -10,6 +10,7 @@ struct EntrySheet: View {
 
     @Environment(LedgerModel.self) private var model
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.dynamicTypeSize) private var typeSize
     let mode: Mode
 
     @State private var type: TxType = .expense
@@ -63,7 +64,8 @@ struct EntrySheet: View {
                     ScrollView {
                         VStack(spacing: Gap.section) {
                             categoryGrid
-                            details
+                            // 字放到很大時位置不夠，日期和備註跟著一起捲。
+                            if typeSize.isAccessibilitySize { details }
                         }
                         .padding(.horizontal, Gap.screenMargin)
                         .padding(.vertical, Gap.group)
@@ -72,9 +74,17 @@ struct EntrySheet: View {
                     .scrollDismissesKeyboard(.interactively)
                     // 鍵盤升完再捲到底，備註欄才不會貼著鍵盤。
                     .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardDidShowNotification)) { _ in
-                        guard noteFocused else { return }
+                        guard noteFocused, typeSize.isAccessibilitySize else { return }
                         withAnimation(Motion.change) { proxy.scrollTo(Self.contentID, anchor: .bottom) }
                     }
+                }
+
+                // 分類再多，日期和備註都固定在鍵盤上面看得到。
+                if !typeSize.isAccessibilitySize {
+                    details
+                        .padding(.horizontal, Gap.screenMargin)
+                        .padding(.top, Gap.item)
+                        .padding(.bottom, noteFocused ? Gap.group : 0)
                 }
 
                 // 打備註時讓位給系統鍵盤。

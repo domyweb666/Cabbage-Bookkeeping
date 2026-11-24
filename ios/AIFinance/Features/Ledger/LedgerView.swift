@@ -164,6 +164,8 @@ struct CategoryIcon: View {
     var body: some View {
         Image(systemName: category.icon)
             .font(Typo.body.font)
+            // 圓圈大小固定，圖示放大到這裡為止，不撐出去。
+            .dynamicTypeSize(...DynamicTypeSize.xxLarge)
             .foregroundStyle(Theme.accent)
             .frame(width: Theme.Part.badge, height: Theme.Part.badge)
             .background(Theme.accentSoft, in: Circle())

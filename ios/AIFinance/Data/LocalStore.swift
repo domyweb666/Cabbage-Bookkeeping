@@ -42,7 +42,6 @@ final class StoredCategoryBook {
 final class LocalStore {
     private static let bookID = UUID(uuid: (0xBA, 0x1C, 0xA1, 0, 0, 0, 0x40, 0, 0x80, 0, 0, 0, 0, 0, 0, 0))
 
-
     private let container: ModelContainer
     private let context: ModelContext
     private let encoder = JSONEncoder()

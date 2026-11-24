@@ -141,6 +141,7 @@ struct CategoryEditView: View {
                         Image(systemName: symbol)
                             .font(Typo.body.font)
                             .foregroundStyle(icon == symbol ? Theme.onAccent : Theme.primaryText)
+                            .dynamicTypeSize(...DynamicTypeSize.xxLarge)
                             .frame(width: Metric.touch, height: Metric.touch)
                             .background(icon == symbol ? Theme.accent : Theme.background, in: Circle())
                     }
