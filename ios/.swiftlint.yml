@@ -1,0 +1,85 @@
+# SwiftLint。開發機沒有 Mac，規則還沒在這個專案跑過，所以 CI 先設 continue-on-error，看過一輪再改成會擋。
+# 門檻照準則 2-7 的嚴格組。四條擋裸數字的規則照準則 3-17，刻度名那條照 3-46。
+included:
+  - AIFinance
+excluded:
+  - AIFinance/DesignSystem/DomyTokens.swift
+
+opt_in_rules:
+  - empty_count
+  - force_unwrapping
+  - implicitly_unwrapped_optional
+
+# 多行集合結尾加逗號、單行長度由下面的門檻管。
+disabled_rules:
+  - trailing_comma
+  - todo
+
+line_length:
+  warning: 130
+  error: 160
+  ignores_comments: true
+function_body_length:
+  warning: 60
+  error: 90
+cyclomatic_complexity:
+  warning: 10
+  error: 15
+file_length:
+  warning: 500
+  error: 700
+type_body_length:
+  warning: 350
+  error: 450
+identifier_name:
+  min_length: 1
+
+custom_rules:
+  no_print:
+    name: "不准 log"
+    regex: '\b(print|debugPrint|NSLog)\s*\('
+    message: "紀錄內容不進 log"
+    severity: error
+  no_empty_catch:
+    name: "不准空的 catch"
+    regex: '\bcatch\s*(\w+\s*)?\{\s*\}'
+    message: "錯誤要顯示在畫面上"
+    severity: error
+  no_network:
+    name: "不連網路"
+    regex: '\bURLSession\b|\bURLRequest\b'
+    message: "這個 app 不連網路"
+    severity: error
+  no_raw_color:
+    name: "畫面不准寫死顏色"
+    regex: '#[0-9A-Fa-f]{6}\b|\b(Color|UIColor)\s*\(\s*(red|hex|\.sRGB|white|domyLight)'
+    excluded: '.*/DesignSystem/Theme\.swift'
+    message: "顏色從 Theme 拿"
+    severity: error
+  no_raw_font_size:
+    name: "畫面不准寫死字級"
+    regex: '\.font\(\.system\(size:|Font\.system\(size:'
+    message: "字級從 Typo 拿"
+    severity: error
+  no_raw_spacing:
+    name: "畫面不准寫死間距與圓角"
+    regex: '\.padding\((\.[a-zA-Z]+, *)?[0-9]|cornerRadius: *[0-9]|[sS]pacing: *[1-9]'
+    message: "間距從 Gap 拿，圓角從 Theme 拿"
+    severity: error
+  no_raw_duration:
+    name: "畫面不准寫死動畫秒數"
+    regex: 'duration: *[0-9]'
+    message: "動畫從 Motion 拿"
+    severity: error
+  no_scale_name:
+    name: "畫面不准用刻度名"
+    regex: '\bDomyTokens\.(Space|Radius)\b|\bSpace\.s[0-9]'
+    excluded: '.*/DesignSystem/Theme\.swift'
+    message: "間距只寫用途名（準則 3-46）"
+    severity: error
+  no_direct_haptics:
+    name: "震動只走一個入口"
+    regex: 'FeedbackGenerator|\.sensoryFeedback'
+    excluded: '.*/DesignSystem/Haptics\.swift'
+    message: "震動用 Haptics（準則 3-42）"
+    severity: error
