@@ -44,6 +44,12 @@ struct AnalysisView: View {
             }
             .background(Theme.background.ignoresSafeArea())
             .toolbar(.hidden, for: .navigationBar)
+            // 往上捲的時候，字不要疊到狀態列。
+            .safeAreaInset(edge: .top, spacing: 0) {
+                Theme.background
+                    .frame(height: 1)
+                    .background(Theme.background, ignoresSafeAreaEdges: .top)
+            }
             .safeAreaInset(edge: .bottom) {
                 ToastSlot().padding(.horizontal, Theme.Gap.screen)
             }
@@ -321,7 +327,7 @@ private struct CategoryRow: View {
 
 // MARK: - 圖
 
-/// 橫條從 0 開始。實心是平常的花費，空心是一次性，灰底是平常範圍。
+/// 兩條都從 0 開始：上面是這個月（實心平常的花費、空心一次性），下面灰色那段是平常範圍。
 struct CompareBar: View {
     let value: Int
     let extra: Int
@@ -329,20 +335,19 @@ struct CompareBar: View {
     let scale: Int
 
     private static let height: CGFloat = 8
-    private static let bandHeight: CGFloat = 18
+    private static let rangeHeight: CGFloat = 5
+    private static let spacing: CGFloat = 3
     /// 範圍很窄的時候也看得到。
-    private static let minBand: CGFloat = 4
+    private static let minRange: CGFloat = 8
+
+    private var totalHeight: CGFloat {
+        usual == nil ? Self.height : Self.height + Self.spacing + Self.rangeHeight
+    }
 
     var body: some View {
         GeometryReader { geo in
             let unit = geo.size.width / CGFloat(max(1, scale))
-            ZStack(alignment: .leading) {
-                if let usual {
-                    RoundedRectangle(cornerRadius: 4, style: .continuous)
-                        .fill(Theme.band)
-                        .frame(width: max(Self.minBand, CGFloat(usual.high - usual.low) * unit), height: Self.bandHeight)
-                        .offset(x: min(CGFloat(usual.low) * unit, geo.size.width - Self.minBand))
-                }
+            VStack(alignment: .leading, spacing: Self.spacing) {
                 HStack(spacing: 0) {
                     Capsule()
                         .fill(Theme.primaryText)
@@ -353,10 +358,16 @@ struct CompareBar: View {
                             .frame(width: max(4, CGFloat(extra) * unit), height: Self.height)
                     }
                 }
+                if let usual {
+                    let width = max(Self.minRange, CGFloat(usual.high - usual.low) * unit)
+                    Capsule()
+                        .fill(Theme.band)
+                        .frame(width: width, height: Self.rangeHeight)
+                        .offset(x: min(CGFloat(usual.low) * unit, max(0, geo.size.width - width)))
+                }
             }
-            .frame(width: geo.size.width, height: Self.bandHeight, alignment: .leading)
         }
-        .frame(height: Self.bandHeight)
+        .frame(height: totalHeight)
     }
 }
 

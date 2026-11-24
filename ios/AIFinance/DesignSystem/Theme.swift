@@ -27,8 +27,8 @@ enum Theme {
     /// 放在主色上面的字。
     static let onAccent = Color(light: 0xFFFFFF, dark: 0x1C1C1E)
     static let income = Color(light: 0x329B79, dark: 0x4CC29B)
-    /// 圖上「平常範圍」那一條的底色。
-    static let band = Color(light: 0xD9D9DE, dark: 0x48484A)
+    /// 圖上「平常範圍」那一段。
+    static let band = Color(light: 0xA9A9B0, dark: 0x7C7C82)
 
     static let cardRadius: CGFloat = 20
     static let keyRadius: CGFloat = 14

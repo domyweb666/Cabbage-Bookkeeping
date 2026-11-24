@@ -23,6 +23,7 @@ struct EntrySheet: View {
     @State private var saveFailed = false
     @FocusState private var noteFocused: Bool
 
+    private static let contentID = "entryContent"
     private let columns = Array(repeating: GridItem(.flexible(), spacing: Theme.Gap.item), count: 4)
 
     private var original: Txn? {
@@ -39,15 +40,22 @@ struct EntrySheet: View {
         NavigationStack {
             VStack(spacing: 0) {
                 amount
-                ScrollView {
-                    VStack(spacing: Theme.Gap.section) {
-                        categoryGrid
-                        details
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        VStack(spacing: Theme.Gap.section) {
+                            categoryGrid
+                            details
+                        }
+                        .padding(.horizontal, Theme.Gap.screen)
+                        .padding(.vertical, Theme.Gap.group)
+                        .id(Self.contentID)
                     }
-                    .padding(.horizontal, Theme.Gap.screen)
-                    .padding(.vertical, Theme.Gap.group)
+                    .scrollDismissesKeyboard(.interactively)
+                    // 鍵盤升完再捲到底，備註欄才不會貼著鍵盤。
+                    .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardDidShowNotification)) { _ in
+                        withAnimation { proxy.scrollTo(Self.contentID, anchor: .bottom) }
+                    }
                 }
-                .scrollDismissesKeyboard(.interactively)
 
                 // 打備註時讓位給系統鍵盤。
                 if !noteFocused {
@@ -137,26 +145,18 @@ struct EntrySheet: View {
 
     private var details: some View {
         VStack(spacing: Theme.Gap.group) {
-            HStack(spacing: Theme.Gap.group) {
-                DatePicker("日期", selection: $date, in: ...latestDate, displayedComponents: .date)
-                    .labelsHidden()
-                    .environment(\.locale, Locale(identifier: "zh_TW"))
-                    .environment(\.timeZone, model.days.timeZone)
-                    .accessibilityIdentifier("entryDate")
-                Spacer(minLength: 0)
-                if type == .expense {
-                    Button {
-                        isOneOff.toggle()
-                    } label: {
-                        Label("一次性", systemImage: isOneOff ? "checkmark.circle.fill" : "circle")
-                            .font(.subheadline)
-                            .foregroundStyle(isOneOff ? Theme.accent : Theme.secondaryText)
-                            .frame(minHeight: 44)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityAddTraits(isOneOff ? .isSelected : [])
-                    .accessibilityIdentifier("entryOneOff")
+            // 字放大到一排放不下時，改成上下兩排。
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: Theme.Gap.group) {
+                    datePicker
+                    Spacer(minLength: 0)
+                    oneOffButton
                 }
+                VStack(alignment: .leading, spacing: Theme.Gap.group) {
+                    datePicker
+                    oneOffButton
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
             if isOneOff, type == .expense {
                 Text("跟平常比的時候，不算這一筆。")
@@ -173,6 +173,33 @@ struct EntrySheet: View {
                 .background(Theme.card)
                 .clipShape(RoundedRectangle(cornerRadius: Theme.keyRadius, style: .continuous))
                 .accessibilityIdentifier("entryNote")
+        }
+    }
+
+    private var datePicker: some View {
+        DatePicker("日期", selection: $date, in: ...latestDate, displayedComponents: .date)
+            .labelsHidden()
+            .environment(\.locale, Locale(identifier: "zh_TW"))
+            .environment(\.timeZone, model.days.timeZone)
+            .accessibilityIdentifier("entryDate")
+    }
+
+    @ViewBuilder
+    private var oneOffButton: some View {
+        if type == .expense {
+            Button {
+                isOneOff.toggle()
+            } label: {
+                Label("一次性", systemImage: isOneOff ? "checkmark.circle.fill" : "circle")
+                    .font(.subheadline)
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
+                    .foregroundStyle(isOneOff ? Theme.accent : Theme.secondaryText)
+                    .frame(minHeight: 44)
+            }
+            .buttonStyle(.plain)
+            .accessibilityAddTraits(isOneOff ? .isSelected : [])
+            .accessibilityIdentifier("entryOneOff")
         }
     }
 
@@ -214,13 +241,14 @@ private struct CategoryCell: View {
             VStack(spacing: Theme.Gap.tight) {
                 Image(systemName: category.icon)
                     .font(.title3)
-                    .frame(height: 28)
+                    .frame(minHeight: 28)
                 Text(category.name)
                     .font(.footnote)
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
             }
             .foregroundStyle(isSelected ? Theme.onAccent : Theme.primaryText)
+            .padding(.vertical, Theme.Gap.tight)
             .frame(maxWidth: .infinity, minHeight: 64)
             .background(isSelected ? Theme.accent : Theme.card)
             .clipShape(RoundedRectangle(cornerRadius: Theme.keyRadius, style: .continuous))
