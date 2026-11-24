@@ -1,65 +1,80 @@
 # 白菜記帳
 
-講一句就入帳、用問的查帳的 iOS 記帳 App。「白菜」取「百財」的諧音。
+按金額、點分類就記好一筆的 iOS 記帳 App。「白菜」取「百財」的諧音。
 
-打「麥當勞 188」就記好一筆，打「這個月外食花多少？」就得到答案，兩件事用同一個輸入列。規格在 [AI_FINANCE_SPEC.md](AI_FINANCE_SPEC.md)。
+紀錄存在手機上，不用登入，App 也不連網路。
 
 ## 現在的狀態
 
-程式照規格 Phase 0 到 5 寫完了。後端在 CI 上有完整測試，iOS 在 CI 上編譯並用示範後端跑過畫面測試。還沒接上真實的 Supabase 專案、AI 金鑰與 TestFlight，要做的事列在 [docs/SETUP.md](docs/SETUP.md)。
+2026-11-25 改了方向。原本是講一句話由 AI 記帳、用問的查帳，現在改成手選金額與分類。聚光燈引導、小白菜、語音、Apple ID 綁定和雲端同步也一起拿掉。AI 版最後的 commit 是 `49444cc`，規格留在 [AI_FINANCE_SPEC.md](AI_FINANCE_SPEC.md)。
 
-各階段的測試結果在 [docs/DEVELOPMENT_LOG.md](docs/DEVELOPMENT_LOG.md)，我自己決定的做法在 [docs/DECISIONS.md](docs/DECISIONS.md)，上了 TestFlight 之後要實測的項目在 [docs/TESTFLIGHT_CHECKLIST.md](docs/TESTFLIGHT_CHECKLIST.md)。
+App 現在有三個分頁：
+
+- 記帳：本月支出、每天的明細（最新在上）、底部一顆「記一筆」。
+- 分析：這個月花了多少、花在哪一類、最大的三筆、最近幾個月。月初七天內，上個月的回顧會排在最上面。
+- 設定：匯出、清除所有資料、隱私說明、版本。
+
+程式還沒上過 TestFlight，要準備的東西在 [docs/SETUP.md](docs/SETUP.md)。
+
+| 想知道什麼 | 看哪裡 |
+|---|---|
+| 做了什麼、驗證到哪裡 | [docs/DEVELOPMENT_LOG.md](docs/DEVELOPMENT_LOG.md) |
+| 自己決定了哪些做法 | [docs/DECISIONS.md](docs/DECISIONS.md) |
+| 上了 TestFlight 要在手機上試什麼 | [docs/TESTFLIGHT_CHECKLIST.md](docs/TESTFLIGHT_CHECKLIST.md) |
+| 分析頁為什麼這樣設計、數字怎麼算 | `.analytics/` |
 
 ## 目錄
 
 ```text
 ios/
   AIFinance/              App 本體（SwiftUI）
+    App/                  進入點、三個分頁、測試用的啟動參數
+    Data/                 存進手機（SwiftData）、全部畫面共用的資料與動作
+    DesignSystem/         顏色、字級、間距
+    Features/Ledger/      記帳分頁
+    Features/Entry/       記一筆、改一筆
+    Features/Analysis/    分析分頁、分類明細、每月預算
+    Features/Settings/    設定與隱私說明
   AIFinanceUITests/       畫面測試
-  Packages/FinanceCore/   只依賴 Foundation 的邏輯與單元測試
+  Packages/FinanceCore/   日期、金額、分析算法、文案、CSV，含單元測試
   project.yml             Xcode 專案設定（XcodeGen）
-supabase/
-  migrations/             資料表、RLS、查帳函式
-  functions/record        記帳與確認
-  functions/ask           查帳
-  functions/_shared       AI 介面、入帳規則、查詢工具
-  tests/                  後端測試
-eval/                     108 句解析評測
+.analytics/               分析頁的設計檔
 docs/                     設定指南、開發紀錄、決策、隱私文件草稿
 design/AppIcon.svg        App 圖示原稿
+supabase/、eval/          AI 版的後端與評測，App 沒有用到
 ```
+
+`supabase/` 和 `eval/` 要不要刪還沒決定。
 
 ## 資料怎麼走
 
-一句話送到後端的 `record`。後端先把原話存起來，再請 AI 判斷這是記帳、提問，還是看不懂。
+按「記下」之後，`LedgerModel` 把這筆交給 `LocalStore`，寫進手機上的 SwiftData。寫成功才會出現在畫面上；寫失敗就跳出提示，填好的內容留在畫面上。
 
-記帳的話，AI 只回一份結構化的結果，不碰資料庫。要不要直接入帳由程式規則決定：金額要能在原話裡找到、在門檻以內、日期在七天內、分類在清單裡、不是收入。全部符合才寫入，並且可以復原；有任何一條不符合，就把草稿和原因回給 App，讓使用者在確認卡上修改。
+刪除是先把那筆標成已刪除，明細、分析和匯出都不會算它，提示條上可以馬上復原。修改會把改之前的類型、金額、日期、分類和一次性留在同一筆裡。設定的「清除所有資料」才會把資料真的刪掉。
 
-提問的話，AI 只能呼叫四個查詢工具，數字全部由資料庫算。回答裡的金額如果在查詢結果裡找不到，後端會把回答換成查詢結果的制式摘要。
+首頁和分析頁的數字都是從紀錄當場算的，沒有另外存總數。算法在 `FinanceCore/Analysis.swift`，畫面上的句子在 `FinanceCore/AnalysisText.swift`，兩個檔各自對應 `.analytics/` 的設計檔，要改就一起改。
 
-## 在 Windows 上開發
+資料庫打不開時，App 會顯示「打不開紀錄」，不讓人繼續記。
 
-後端的規則測試不需要資料庫：
+## 在 Windows 上驗證
 
-```bash
-npx deno test supabase/tests/rules_test.ts
-```
-
-完整的後端測試需要本機 Supabase（要先開 Docker Desktop）：
+iOS 沒辦法在 Windows 上編譯，所以都靠 GitHub Actions。`build-mvp` 有開著的 PR，推上去就會自動跑 CI：FinanceCore 單元測試、編譯、把主要流程點一遍並截圖。
 
 ```bash
-npx supabase start
+git push origin build-mvp
 ```
 
 ```bash
-npx supabase status -o env > .env.local
+gh run list --workflow ci.yml --branch build-mvp --limit 3
 ```
 
 ```bash
-npx deno test --allow-net --allow-env --allow-read --env-file=.env.local supabase/tests
+gh run download <執行編號> -n ios-screenshots
 ```
 
-iOS 沒辦法在 Windows 上編譯。推到 GitHub 之後，Actions 會在 macOS 上跑 FinanceCore 的單元測試、編譯 App、用示範後端把主要流程點過一遍並截圖。截圖在該次執行的 Artifacts 裡，名稱是 `ios-screenshots`。
+截圖保留 14 天。畫面測試會把今天固定在 2026-11-25（月初回顧那個測試用 11-03），並用 `-demo fresh`、`-demo steady`、`-demo returning` 放進假資料，所以每次跑出來的數字都一樣。這幾個啟動參數列在 `ios/AIFinance/App/AppConfig.swift`，平常打開 App 不會用到。
+
+`backend.yml` 只在併進 main 時有動到 `supabase/`、`eval/`，或手動執行時才跑。
 
 ## 改圖示
 

@@ -1,8 +1,9 @@
 name: 後端（App 目前沒有用到）
 
-# 2026-11-25 起 App 的資料存在手機上，不再連這份後端。留著檔案，動到時才跑測試。
+# 2026-11-25 起 App 的資料存在手機上，不再連這份後端。留著檔案，併進 main 有動到，或手動執行時才跑測試。
 on:
-  pull_request:
+  push:
+    branches: [main]
     paths: ["supabase/**", "eval/**", ".github/workflows/backend.yml"]
   workflow_dispatch:
 

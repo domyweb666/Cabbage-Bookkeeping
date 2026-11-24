@@ -123,6 +123,7 @@ final class LedgerModel {
 
     /// 訂這個月起的預算。0 代表不訂。
     func setBudget(_ amount: Int) -> Bool {
+        guard !loadFailed else { return false }
         let budget = Budget(month: days.monthStart(of: today), amount: amount, createdAt: Date())
         do {
             try store.save(budget)
@@ -141,6 +142,7 @@ final class LedgerModel {
             budgets = []
             loadFailed = false
             toast = nil
+            removeExports()
             return true
         } catch {
             return false
@@ -153,6 +155,16 @@ final class LedgerModel {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("白菜記帳_\(today).csv")
         try Data(csv.utf8).write(to: url, options: .atomic)
         return url
+    }
+
+    /// 之前匯出留下的暫存檔也一起刪。
+    private func removeExports() {
+        let files = FileManager.default
+        let folder = files.temporaryDirectory
+        let names = (try? files.contentsOfDirectory(atPath: folder.path)) ?? []
+        for name in names where name.hasSuffix(".csv") {
+            try? files.removeItem(at: folder.appendingPathComponent(name))
+        }
     }
 
     private func write(_ row: Txn) -> Bool {
