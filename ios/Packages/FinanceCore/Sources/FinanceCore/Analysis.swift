@@ -48,8 +48,8 @@ public struct CategoryLine: Identifiable, Hashable, Sendable {
     public var routine: Int { total - oneOff }
 }
 
-/// 一個過了門檻的現象。分析頁一次最多說一個。
-public struct Observation: Hashable, Sendable {
+/// 一個過了門檻的現象（觀察）。名字避開系統的 Observation 模組。分析頁一次最多說一個。
+public struct SpendingNote: Hashable, Sendable {
     public let category: TxCategory
     public let amount: Int
     public let count: Int
@@ -88,7 +88,7 @@ public struct MonthReport: Hashable, Sendable {
     public let expenseCount: Int
     public let comparison: Comparison
     public let categories: [CategoryLine]
-    public let observation: Observation?
+    public let observation: SpendingNote?
     public let biggest: [Txn]
     public let budget: BudgetStatus?
 
@@ -255,9 +255,9 @@ public enum Analysis {
 
     private static func observe(
         lines: [CategoryLine], expenses: [Txn], baseline: [[Txn]], throughDay: Int
-    ) -> Observation? {
+    ) -> SpendingNote? {
         guard throughDay >= observeFromDay else { return nil }
-        let candidates = lines.compactMap { line -> (Observation, Int)? in
+        let candidates = lines.compactMap { line -> (SpendingNote, Int)? in
             guard let usual = line.usual else { return nil }
             let count = expenses.filter { $0.categoryId == line.id && !$0.isOneOff }.count
             let pastCount = baseline.reduce(0) { $0 + $1.filter { $0.categoryId == line.id }.count }
@@ -268,7 +268,7 @@ public enum Analysis {
                   difference >= observeAmount,
                   Double(difference) >= Double(edge) * observeRatio else { return nil }
             return (
-                Observation(category: line.category, amount: line.routine, count: count, usual: usual),
+                SpendingNote(category: line.category, amount: line.routine, count: count, usual: usual),
                 difference
             )
         }

@@ -89,7 +89,7 @@ public enum AnalysisText {
     }
 
     /// B3
-    public static func observationLink(_ observation: Observation) -> String {
+    public static func observationLink(_ observation: SpendingNote) -> String {
         "看這 \(observation.count) 筆\(observation.category.name)"
     }
 
