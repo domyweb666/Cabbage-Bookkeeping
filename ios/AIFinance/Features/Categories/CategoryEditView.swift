@@ -70,7 +70,6 @@ struct CategoryEditView: View {
         .navigationTitle(target.category == nil ? Words.CategoryEdit.newTitle : Words.CategoryEdit.editTitle)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.visible, for: .navigationBar)
-        .navigationBarBackButtonHidden(true)
         .interactiveDismissDisabled(isDirty)
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
