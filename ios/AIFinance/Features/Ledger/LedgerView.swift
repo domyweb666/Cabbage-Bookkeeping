@@ -144,8 +144,8 @@ struct TxnRow: View {
                     Text(subtitle)
                         .font(Typo.caption.font)
                         .foregroundStyle(Theme.secondaryText)
-                        // 字放大時日期和「一次性」會排不下，准許兩行。
-                        .lineLimit(typeSize.isAccessibilitySize ? 2 : 1)
+                        // 字放大時日期和「一次性」會排不下，不限行數。
+                        .lineLimit(typeSize.isAccessibilitySize ? nil : 1)
                 }
             }
             Spacer(minLength: Gap.item)
