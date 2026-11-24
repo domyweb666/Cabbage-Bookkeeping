@@ -72,6 +72,9 @@ struct EntrySheet: View {
                         .id(Self.contentID)
                     }
                     .scrollDismissesKeyboard(.interactively)
+                    // 分類超過一個畫面時閃一下捲軸，看得出下面還有。
+                    .scrollIndicatorsFlash(onAppear: true)
+                    .scrollIndicatorsFlash(trigger: type)
                     // 鍵盤升完再捲到底，備註欄才不會貼著鍵盤。
                     .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardDidShowNotification)) { _ in
                         guard noteFocused, typeSize.isAccessibilitySize else { return }
@@ -208,12 +211,6 @@ struct EntrySheet: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
-            if isOneOff, type == .expense {
-                Text(Words.Entry.oneOffHint)
-                    .font(Typo.footnote.font)
-                    .foregroundStyle(Theme.secondaryText)
-                    .frame(maxWidth: .infinity, alignment: .trailing)
-            }
             TextField(Words.Entry.note, text: $note)
                 .focused($noteFocused)
                 .submitLabel(.done)
@@ -239,7 +236,8 @@ struct EntrySheet: View {
             Button {
                 isOneOff.toggle()
             } label: {
-                Label(Words.Ledger.oneOff, systemImage: isOneOff ? "checkmark.circle.fill" : "circle")
+                // 說明寫在同一排，勾了也不會多一行把分類格擠掉。
+                Label(isOneOff ? Words.Entry.oneOffOn : Words.Ledger.oneOff, systemImage: isOneOff ? "checkmark.circle.fill" : "circle")
                     .font(Typo.subheadline.font)
                     .lineLimit(1)
                     .fixedSize(horizontal: true, vertical: false)

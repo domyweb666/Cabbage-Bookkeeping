@@ -63,7 +63,7 @@ enum Words {
         static let backspace = "退格"
         static let date = "日期"
         static let note = "備註，可以不填"
-        static let oneOffHint = "跟平常比的時候，不算這一筆。"
+        static let oneOffOn = "一次性，不跟平常比"
         static let delete = "刪除"
         static let deleteTitle = "刪除這筆紀錄？"
         static let deleteConfirm = "刪除這筆"

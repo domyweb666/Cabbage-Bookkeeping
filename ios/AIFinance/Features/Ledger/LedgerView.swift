@@ -122,6 +122,8 @@ struct TxnRow: View {
 
     private var category: TxCategory { model.category(of: item) }
 
+    @Environment(\.dynamicTypeSize) private var typeSize
+
     private var subtitle: String {
         var parts: [String] = []
         if let dayText { parts.append(dayText) }
@@ -142,7 +144,8 @@ struct TxnRow: View {
                     Text(subtitle)
                         .font(Typo.caption.font)
                         .foregroundStyle(Theme.secondaryText)
-                        .lineLimit(1)
+                        // 字放大時日期和「一次性」會排不下，准許兩行。
+                        .lineLimit(typeSize.isAccessibilitySize ? 2 : 1)
                 }
             }
             Spacer(minLength: Gap.item)
