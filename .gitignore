@@ -30,3 +30,11 @@ eval/results/
 # XcodeGen 產生的檔案
 ios/AIFinance/Resources/Info.plist
 ios/AIFinance/Resources/AIFinance.entitlements
+
+# 簽章與金鑰，不進版控
+*.p8
+*.p12
+*.cer
+*.key
+*.certSigningRequest
+*.mobileprovision
