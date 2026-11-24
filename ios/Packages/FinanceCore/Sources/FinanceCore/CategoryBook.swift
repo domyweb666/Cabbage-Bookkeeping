@@ -214,9 +214,11 @@ public struct CategoryBook: Codable, Hashable, Sendable {
         return true
     }
 
-    /// 改名字和圖示。內建的存成覆蓋，改回原樣就把覆蓋拿掉。
-    public mutating func edit(_ id: UUID, name: String, icon: String) -> Bool {
+    /// 改名字和圖示，順便往前（負）或往後（正）移幾格。內建的存成覆蓋，改回原樣就把覆蓋拿掉。
+    public mutating func edit(_ id: UUID, name: String, icon: String, moved: Int = 0) -> Bool {
         guard let category = find(id), problem(with: name, kind: category.kind, excluding: id) == nil else { return false }
+        // 一格一格移，到頭了就停。
+        for _ in 0..<abs(moved) { shift(id, by: moved.signum()) }
         let trimmed = Self.trimmed(name)
         if let index = customs.firstIndex(where: { $0.id == id }) {
             customs[index].name = trimmed

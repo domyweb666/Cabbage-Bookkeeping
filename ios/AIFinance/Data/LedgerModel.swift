@@ -24,7 +24,7 @@ final class LedgerModel {
     private(set) var budgets: [Budget] = []
     private(set) var toast: Toast?
     private(set) var today: String
-    /// 有紀錄讀不出來時不開放寫入，免得蓋掉還在的資料。
+    /// 紀錄、預算、分類設定有一樣讀不出來就是 true：不列明細、不匯出、不開放寫入，免得顯示錯的或蓋掉還在的資料。
     private(set) var loadFailed = false
     /// 分類的名字、圖示、顯示哪些、順序。
     private(set) var book = CategoryBook()
@@ -36,9 +36,13 @@ final class LedgerModel {
         self.store = store
         self.today = AppConfig.current.today ?? Days.local.day(of: Date())
         do {
-            transactions = try store.transactions()
-            budgets = try store.budgets()
-            book = try store.categoryBook()
+            // 三樣都讀到才用。分類設定讀不出來時，自訂分類會被算成「其他」，明細和匯出都會錯。
+            let savedRows = try store.transactions()
+            let savedBudgets = try store.budgets()
+            let savedBook = try store.categoryBook()
+            transactions = savedRows
+            budgets = savedBudgets
+            book = savedBook
         } catch {
             loadFailed = true
         }

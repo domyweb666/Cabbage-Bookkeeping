@@ -1,6 +1,6 @@
 import Foundation
 
-// 分析頁的所有算法。定義與理由寫在 .analytics/05-指標字典.md，兩邊要一起改。
+// 分析頁的所有算法。定義與理由寫在 .analytics/05-指標字典-暫定.md，題目在 01-問題清單-暫定.md，兩邊要一起改。
 
 /// 平常範圍：前幾個可以比的月份裡，同一段期間最少與最多各花多少。
 public struct UsualRange: Hashable, Sendable {

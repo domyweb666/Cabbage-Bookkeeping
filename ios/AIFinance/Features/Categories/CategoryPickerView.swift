@@ -163,11 +163,10 @@ struct CategoryPickerView: View {
                 Haptics.failed()
                 return
             }
-            change { $0.hide(category.id) }
+            if change({ $0.hide(category.id) }) { Haptics.selected() }
         } else {
-            change { $0.show(category.id) }
+            if change({ $0.show(category.id) }) { Haptics.selected() }
         }
-        Haptics.selected()
     }
 
     private func shift(_ category: TxCategory, by step: Int) {
@@ -175,11 +174,14 @@ struct CategoryPickerView: View {
         change { $0.shift(category.id, by: step) }
     }
 
-    private func change(_ edit: (inout CategoryBook) -> Void) {
+    /// 存成了回傳 true。
+    @discardableResult
+    private func change(_ edit: (inout CategoryBook) -> Void) -> Bool {
         let saved = model.changeBook { book in
             edit(&book)
             return true
         }
         if !saved { saveFailed = true }
+        return saved
     }
 }

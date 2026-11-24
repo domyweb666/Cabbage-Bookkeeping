@@ -12,11 +12,16 @@ struct LedgerView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            header
-            if model.isEmpty {
-                emptyState
+            // 讀不出來的時候不顯示總數，0 元是錯的。
+            if model.loadFailed {
+                EmptyMessage(title: Words.Failure.loadTitle, message: Words.Failure.loadMessage)
             } else {
-                list
+                header
+                if model.isEmpty {
+                    EmptyMessage(title: Words.Ledger.emptyTitle, message: Words.Ledger.emptyMessage)
+                } else {
+                    list
+                }
             }
         }
         .background(Theme.background.ignoresSafeArea())
@@ -63,15 +68,6 @@ struct LedgerView: View {
         .padding(.bottom, Gap.group)
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("monthTotal")
-    }
-
-    @ViewBuilder
-    private var emptyState: some View {
-        if model.loadFailed {
-            EmptyMessage(title: Words.Failure.loadTitle, message: Words.Failure.loadMessage)
-        } else {
-            EmptyMessage(title: Words.Ledger.emptyTitle, message: Words.Ledger.emptyMessage)
-        }
     }
 
     private var list: some View {

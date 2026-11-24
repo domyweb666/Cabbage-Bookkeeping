@@ -17,6 +17,8 @@ struct SettingsView: View {
 
     private let config = VeggieConfig.baicai
 
+    private var canExport: Bool { !model.isEmpty && !model.loadFailed }
+
     var body: some View {
         NavigationStack {
             DomyPage(title: Words.Settings.title, background: Theme.background, bottomInset: 0) {
@@ -32,9 +34,11 @@ struct SettingsView: View {
             .safeAreaInset(edge: .bottom) {
                 ToastSlot().padding(.horizontal, Gap.screenMargin)
             }
-            // 問兩次，兩次的按鈕字不同；第一次附「先匯出」。
+            // 問兩次，兩次的按鈕字不同；第一次附「先匯出」。讀不出來時匯出會是空的，就不附。
             .alert(Words.Settings.eraseTitle, isPresented: $confirmDelete) {
-                Button(Words.Settings.exportFirst) { export() }
+                if !model.loadFailed {
+                    Button(Words.Settings.exportFirst) { export() }
+                }
                 Button(Words.Settings.eraseContinue, role: .destructive) { confirmDeleteAgain = true }
                 Button(Words.cancel, role: .cancel) {}
             } message: {
@@ -94,10 +98,10 @@ struct SettingsView: View {
                 export()
             } label: {
                 VeggieRow(icon: "square.and.arrow.up", title: VeggieText.exportData)
-                    .opacity(model.isEmpty ? Motion.pressOpacity / 2 : 1)
+                    .opacity(canExport ? 1 : Motion.pressOpacity / 2)
             }
             .buttonStyle(.row)
-            .disabled(model.isEmpty)
+            .disabled(!canExport)
             .accessibilityIdentifier("exportButton")
             RowDivider()
             Button {

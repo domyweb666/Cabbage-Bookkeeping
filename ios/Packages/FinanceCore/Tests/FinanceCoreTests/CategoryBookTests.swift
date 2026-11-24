@@ -68,6 +68,16 @@ final class CategoryBookTests: XCTestCase {
         XCTAssertFalse(book.shift(breakfast.id, by: 1), "沒顯示的不能移")
     }
 
+    func testEditMovesAtTheSameTime() {
+        var book = CategoryBook()
+        XCTAssertTrue(book.edit(food.id, name: "吃飯", icon: food.icon, moved: 2))
+        XCTAssertEqual(names(book).prefix(3), ["交通", "購物", "吃飯"])
+        XCTAssertTrue(book.edit(food.id, name: "飲食", icon: food.icon, moved: -99))
+        XCTAssertEqual(book, CategoryBook(), "移到頭就停，改回原樣就跟沒動過一樣")
+        XCTAssertFalse(book.edit(food.id, name: "交通", icon: food.icon, moved: 1))
+        XCTAssertEqual(book, CategoryBook(), "名字不能用就整份不動")
+    }
+
     func testNameRules() {
         let book = withCat()
         XCTAssertEqual(book.problem(with: "  ", kind: .expense), .empty)

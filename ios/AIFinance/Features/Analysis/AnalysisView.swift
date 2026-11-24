@@ -2,7 +2,7 @@ import FinanceCore
 import SwiftUI
 
 /// 分析分頁。每張卡回答一題，第一行直接是答案。
-/// 題目、算法、句子分別在 .analytics/01、05、07。
+/// 題目、算法、句子分別在 .analytics/01、05、06-08。
 struct AnalysisView: View {
     @Environment(LedgerModel.self) private var model
 
@@ -24,13 +24,17 @@ struct AnalysisView: View {
         NavigationStack(path: $path) {
             let report = model.report(month: month)
             DomyPage(title: Words.Analysis.title, background: Theme.background, bottomInset: Theme.pageBottom) {
-                monthSwitcher
+                if model.loadFailed {
+                    EmptyMessage(title: Words.Failure.loadTitle, message: Words.Failure.loadMessage)
+                } else {
+                    monthSwitcher
 
-                if let recap { recapCard(recap) }
-                totalCard(report)
-                if !report.categories.isEmpty { categoryCard(report) }
-                if !report.biggest.isEmpty { biggestCard(report) }
-                if model.recentMonths.count >= 2 { recentCard }
+                    if let recap { recapCard(recap) }
+                    totalCard(report)
+                    if !report.categories.isEmpty { categoryCard(report) }
+                    if !report.biggest.isEmpty { biggestCard(report) }
+                    if model.recentMonths.count >= 2 { recentCard }
+                }
             }
             .coversStatusBar()
             .toolbar(.hidden, for: .navigationBar)

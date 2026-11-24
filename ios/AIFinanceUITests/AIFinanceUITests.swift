@@ -102,6 +102,18 @@ final class AIFinanceUITests: XCTestCase {
         XCTAssertTrue(element.exists, "捲到底還是找不到")
     }
 
+    /// 從一個元件往下拖到螢幕底，跟把彈出的畫面滑掉一樣。
+    private func dragDown(from element: XCUIElement) {
+        let start = element.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+        let end = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.95))
+        start.press(forDuration: 0.1, thenDragTo: end)
+    }
+
+    private func disappears(_ element: XCUIElement, timeout: TimeInterval = 10) -> Bool {
+        let expectation = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: element)
+        return XCTWaiter.wait(for: [expectation], timeout: timeout) == .completed
+    }
+
     // MARK: - 記帳
 
     func testFirstEntryAndUndo() {
@@ -177,6 +189,23 @@ final class AIFinanceUITests: XCTestCase {
         XCTAssertTrue(wait("monthTotal", contains: "NT$6,885"))
         app.buttons["undoButton"].tap()
         XCTAssertTrue(wait("monthTotal", contains: "NT$7,035"), "復原後要回來")
+    }
+
+    /// 沒動過可以往下滑掉；勾了一次性就滑不掉，要按「取消」。
+    func testTouchedEntryCannotBeSwipedAway() {
+        launch()
+        openEntry()
+        dragDown(from: any("entryAmount"))
+        XCTAssertTrue(disappears(app.buttons["entrySave"]), "沒動過可以滑掉")
+
+        openEntry()
+        scrollTo(app.buttons["entryOneOff"])
+        app.buttons["entryOneOff"].tap()
+        XCTAssertTrue(app.buttons["entryOneOff"].isSelected)
+        dragDown(from: any("entryAmount"))
+        XCTAssertFalse(disappears(app.buttons["entrySave"], timeout: 3), "勾了一次性就滑不掉")
+        app.buttons["entryCancel"].tap()
+        XCTAssertTrue(disappears(app.buttons["entrySave"]))
     }
 
     // MARK: - 分析
@@ -407,13 +436,55 @@ final class AIFinanceUITests: XCTestCase {
         scrollTo(any("line_吃飯"))
     }
 
+    /// 打到一半：往下滑、從左邊滑都走不掉，按「取消」才走，而且什麼都沒存。
+    func testTouchedCategoryCannotBeSwipedAway() {
+        launch()
+        openEntry()
+        openCategoriesFromEntry()
+        scrollTo(app.buttons["newCategory"])
+        app.buttons["newCategory"].tap()
+        let name = app.textFields["categoryName"]
+        XCTAssertTrue(name.waitForExistence(timeout: 30))
+        name.tap()
+        name.typeText("貓咪")
+        shot("36-新增分類-打到一半")
+
+        dragDown(from: app.navigationBars["新增分類"])
+        XCTAssertFalse(disappears(name, timeout: 3), "打到一半不能往下滑掉")
+        let left = app.coordinate(withNormalizedOffset: CGVector(dx: 0, dy: 0.3))
+        left.press(forDuration: 0.1, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.3)))
+        XCTAssertFalse(disappears(name, timeout: 3), "打到一半不能從左邊滑走")
+        XCTAssertEqual(name.value as? String, "貓咪")
+
+        app.buttons["categoryCancel"].tap()
+        XCTAssertTrue(app.buttons["categoriesDone"].waitForExistence(timeout: 10))
+        app.buttons["categoriesDone"].tap()
+        XCTAssertTrue(app.buttons["category_飲食"].waitForExistence(timeout: 10))
+        XCTAssertFalse(app.buttons["category_貓咪"].exists, "取消就不會新增")
+    }
+
+    /// 取消編輯：移的順序、改的名字都不算。
+    func testCancelEditingKeepsEverything() {
+        launch()
+        openCategoriesFromSettings()
+        app.buttons["edit_飲食"].tap()
+        let name = app.textFields["categoryName"]
+        XCTAssertTrue(name.waitForExistence(timeout: 30))
+        app.buttons["categoryMoveDown"].tap()
+        name.tap()
+        name.typeText("飯")
+        app.buttons["categoryCancel"].tap()
+        XCTAssertTrue(app.buttons["edit_飲食"].waitForExistence(timeout: 10))
+        XCTAssertLessThan(app.buttons["edit_飲食"].frame.minY, app.buttons["edit_交通"].frame.minY)
+    }
+
     private func shootCategories(_ prefix: String) {
         openCategoriesFromSettings()
         shot("\(prefix)-常用分類-支出")
         app.buttons["edit_飲食"].tap()
         XCTAssertTrue(app.textFields["categoryName"].waitForExistence(timeout: 30))
         shot("\(prefix)-編輯分類")
-        app.navigationBars.buttons.firstMatch.tap()
+        app.buttons["categoryCancel"].tap()
         XCTAssertTrue(app.buttons["edit_飲食"].waitForExistence(timeout: 10))
         app.segmentedControls.buttons["收入"].firstMatch.tap()
         XCTAssertTrue(app.buttons["edit_薪水"].waitForExistence(timeout: 10))

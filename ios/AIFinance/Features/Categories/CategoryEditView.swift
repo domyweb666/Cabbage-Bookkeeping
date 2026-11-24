@@ -10,6 +10,7 @@ struct CategoryTarget: Hashable, Identifiable {
 }
 
 /// 新增分類、改名字與圖示。順序也可以在這裡一格一格移，不用拖。
+/// 按「存分類」才一次存，按「取消」就當作沒動過。
 struct CategoryEditView: View {
     @Environment(LedgerModel.self) private var model
     @Environment(\.dismiss) private var dismiss
@@ -17,6 +18,8 @@ struct CategoryEditView: View {
     private let target: CategoryTarget
     @State private var name: String
     @State private var icon: String
+    /// 往前（負）或往後（正）移了幾格，還沒存。
+    @State private var moved = 0
     @State private var saveFailed = false
     @State private var confirmDelete = false
 
@@ -29,6 +32,14 @@ struct CategoryEditView: View {
     }
 
     private var categoryID: UUID? { target.category?.id }
+
+    /// 內建分類原本的樣子，自己新增的是 nil。
+    private var builtIn: TxCategory? { categoryID.flatMap { Categories.find($0) } }
+
+    /// 動過的內容不給滑掉，要走就按「取消」。
+    private var isDirty: Bool {
+        name != (target.category?.name ?? "") || icon != (target.category?.icon ?? Categories.icons[0]) || moved != 0
+    }
 
     private var problem: CategoryNameProblem? {
         model.book.problem(with: name, kind: target.kind, excluding: categoryID)
@@ -51,7 +62,7 @@ struct CategoryEditView: View {
             nameSection
             if let id = categoryID, model.book.isShown(id) { orderSection(id) }
             iconSection
-            if let id = categoryID, !isCustom, model.book.isRenamed(id) { restoreSection(id) }
+            if let id = categoryID, let builtIn, model.book.isRenamed(id) { restoreSection(builtIn) }
             if isCustom { deleteSection }
         }
         .ledgerList()
@@ -59,7 +70,13 @@ struct CategoryEditView: View {
         .navigationTitle(target.category == nil ? Words.CategoryEdit.newTitle : Words.CategoryEdit.editTitle)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.visible, for: .navigationBar)
+        .navigationBarBackButtonHidden(true)
+        .interactiveDismissDisabled(isDirty)
         .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                Button(Words.cancel) { dismiss() }
+                    .accessibilityIdentifier("categoryCancel")
+            }
             ToolbarItem(placement: .primaryAction) {
                 Button(Words.CategoryEdit.save) { save() }
                     .fontWeight(.semibold)
@@ -102,11 +119,11 @@ struct CategoryEditView: View {
     /// 拖曳以外的另一條路，放在圖示前面才找得到。
     private func orderSection(_ id: UUID) -> some View {
         Section {
-            Button(Words.CategoryEdit.moveUp) { shift(id, by: -1) }
-                .disabled(!model.book.canShift(id, by: -1))
+            Button(Words.CategoryEdit.moveUp) { moved -= 1 }
+                .disabled(!model.book.canShift(id, by: moved - 1))
                 .accessibilityIdentifier("categoryMoveUp")
-            Button(Words.CategoryEdit.moveDown) { shift(id, by: 1) }
-                .disabled(!model.book.canShift(id, by: 1))
+            Button(Words.CategoryEdit.moveDown) { moved += 1 }
+                .disabled(!model.book.canShift(id, by: moved + 1))
                 .accessibilityIdentifier("categoryMoveDown")
         } header: {
             header(Words.CategoryEdit.orderSection)
@@ -139,21 +156,13 @@ struct CategoryEditView: View {
         }
     }
 
-    private func restoreSection(_ id: UUID) -> some View {
+    private func restoreSection(_ original: TxCategory) -> some View {
         Section {
             Button(Words.CategoryEdit.restore) {
-                guard let original = Categories.find(id) else { return }
-                let saved = model.changeBook { book in
-                    book.restoreOriginal(id)
-                    return true
-                }
-                if saved {
-                    name = original.name
-                    icon = original.icon
-                } else {
-                    saveFailed = true
-                }
+                name = original.name
+                icon = original.icon
             }
+            .disabled(name == original.name && icon == original.icon)
             .accessibilityIdentifier("categoryRestore")
         }
     }
@@ -179,14 +188,10 @@ struct CategoryEditView: View {
             .textCase(nil)
     }
 
-    private func shift(_ id: UUID, by step: Int) {
-        if !model.changeBook({ $0.shift(id, by: step) }) { saveFailed = true }
-    }
-
     private func save() {
         guard problem == nil else { return }
         let saved = model.changeBook { book in
-            if let id = categoryID { return book.edit(id, name: name, icon: icon) }
+            if let id = categoryID { return book.edit(id, name: name, icon: icon, moved: moved) }
             return book.add(name, icon: icon, kind: target.kind, at: Date())
         }
         guard saved else {

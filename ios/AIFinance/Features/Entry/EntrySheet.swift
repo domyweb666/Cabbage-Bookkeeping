@@ -18,7 +18,8 @@ struct EntrySheet: View {
     @State private var date = Date()
     @State private var note = ""
     @State private var isOneOff = false
-    @State private var loaded = false
+    /// 剛打開時的內容，用來看有沒有動過。
+    @State private var opened: EntryForm?
     @State private var showCategories = false
     @State private var confirmDelete = false
     @State private var saveFailed = false
@@ -32,12 +33,23 @@ struct EntrySheet: View {
         return nil
     }
 
-    private var canSave: Bool { pad.value > 0 && categoryId != nil }
+    private var form: EntryForm {
+        EntryForm(
+            type: type,
+            amount: pad.value,
+            occurredOn: model.days.day(of: date),
+            categoryId: categoryId,
+            note: note,
+            isOneOff: isOneOff
+        )
+    }
+
+    private var canSave: Bool { form.fields != nil }
 
     /// 動過的內容不給滑掉，要走就按「取消」。
     private var isDirty: Bool {
-        guard let original else { return pad.value > 0 || categoryId != nil || !note.isEmpty }
-        return draft(categoryId ?? original.categoryId) != original.fields || categoryId == nil
+        guard let opened else { return false }
+        return form != opened
     }
 
     /// 可以選到的最後一天是今天。
@@ -232,32 +244,19 @@ struct EntrySheet: View {
     }
 
     private func load() {
-        guard !loaded else { return }
-        loaded = true
-        date = latestDate
-        guard let original else { return }
-        type = original.type
-        pad = AmountPad(value: original.amount)
-        categoryId = original.categoryId
-        date = model.days.date(of: original.occurredOn) ?? latestDate
-        note = original.note
-        isOneOff = original.isOneOff
-    }
-
-    private func draft(_ categoryId: UUID) -> TxnFields {
-        TxnFields(
-            type: type,
-            amount: pad.value,
-            occurredOn: model.days.day(of: date),
-            categoryId: categoryId,
-            note: String(note.trimmingCharacters(in: .whitespacesAndNewlines).prefix(100)),
-            isOneOff: isOneOff
-        )
+        guard opened == nil else { return }
+        let start = original.map { EntryForm(editing: $0, book: model.book) } ?? EntryForm(today: model.today)
+        opened = start
+        type = start.type
+        pad = AmountPad(value: start.amount)
+        categoryId = start.categoryId
+        date = model.days.date(of: start.occurredOn) ?? latestDate
+        note = start.note
+        isOneOff = start.isOneOff
     }
 
     private func save() {
-        guard canSave, let categoryId else { return }
-        let fields = draft(categoryId)
+        guard let fields = form.fields else { return }
         let done = original.map { model.update($0, with: fields) } ?? model.add(fields)
         if done { dismiss() } else { saveFailed = true }
     }
