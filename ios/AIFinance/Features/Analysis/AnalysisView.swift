@@ -23,35 +23,19 @@ struct AnalysisView: View {
     var body: some View {
         NavigationStack(path: $path) {
             let report = model.report(month: month)
-            ScrollView {
-                VStack(alignment: .leading, spacing: Theme.Gap.section) {
-                    Text("分析")
-                        .font(.largeTitle.bold())
-                        .foregroundStyle(Theme.primaryText)
-                        .accessibilityAddTraits(.isHeader)
+            DomyPage(title: Words.Analysis.title, background: Theme.background, bottomInset: Theme.pageBottom) {
+                monthSwitcher
 
-                    monthSwitcher
-
-                    if let recap { recapCard(recap) }
-                    totalCard(report)
-                    if !report.categories.isEmpty { categoryCard(report) }
-                    if !report.biggest.isEmpty { biggestCard(report) }
-                    if model.recentMonths.count >= 2 { recentCard }
-                }
-                .padding(.horizontal, Theme.Gap.screen)
-                .padding(.top, Theme.Gap.pageTop)
-                .padding(.bottom, Theme.Gap.section)
+                if let recap { recapCard(recap) }
+                totalCard(report)
+                if !report.categories.isEmpty { categoryCard(report) }
+                if !report.biggest.isEmpty { biggestCard(report) }
+                if model.recentMonths.count >= 2 { recentCard }
             }
-            .background(Theme.background.ignoresSafeArea())
+            .coversStatusBar()
             .toolbar(.hidden, for: .navigationBar)
-            // 往上捲的時候，字不要疊到狀態列。
-            .safeAreaInset(edge: .top, spacing: 0) {
-                Theme.background
-                    .frame(height: 1)
-                    .background(Theme.background, ignoresSafeAreaEdges: .top)
-            }
             .safeAreaInset(edge: .bottom) {
-                ToastSlot().padding(.horizontal, Theme.Gap.screen)
+                ToastSlot().padding(.horizontal, Gap.screenMargin)
             }
             .navigationDestination(for: CategoryPick.self) { CategoryDetailView(pick: $0) }
             .sheet(isPresented: $showBudget) { BudgetSheet() }
@@ -67,14 +51,15 @@ struct AnalysisView: View {
             Button {
                 pick(model.days.adding(months: -1, toMonthOf: month))
             } label: {
-                Image(systemName: "chevron.left").frame(width: 44, height: 44)
+                monthArrow("chevron.left", enabled: true)
             }
-            .accessibilityLabel("上個月")
+            .buttonStyle(.press)
+            .accessibilityLabel(Words.Analysis.previousMonth)
             .accessibilityIdentifier("previousMonth")
 
             Spacer()
             Text(model.days.monthTitle(of: month))
-                .font(.headline)
+                .font(Typo.headline.font)
                 .foregroundStyle(Theme.primaryText)
                 .accessibilityIdentifier("monthTitle")
             Spacer()
@@ -82,12 +67,21 @@ struct AnalysisView: View {
             Button {
                 pick(model.days.adding(months: 1, toMonthOf: month))
             } label: {
-                Image(systemName: "chevron.right").frame(width: 44, height: 44)
+                monthArrow("chevron.right", enabled: month < thisMonth)
             }
+            .buttonStyle(.press)
             .disabled(month >= thisMonth)
-            .accessibilityLabel("下個月")
+            .accessibilityLabel(Words.Analysis.nextMonth)
             .accessibilityIdentifier("nextMonth")
         }
+    }
+
+    private func monthArrow(_ name: String, enabled: Bool) -> some View {
+        Image(systemName: name)
+            .font(Typo.headline.font)
+            .foregroundStyle(enabled ? Theme.accent : Theme.disabledText)
+            .frame(width: Metric.touch, height: Metric.touch)
+            .contentShape(Rectangle())
     }
 
     private func pick(_ target: String) {
@@ -107,15 +101,15 @@ struct AnalysisView: View {
         Button {
             pick(report.month)
         } label: {
-            VStack(alignment: .leading, spacing: Theme.Gap.item) {
+            VStack(alignment: .leading, spacing: Gap.item) {
                 HStack {
                     cardTitle(AnalysisText.recapTitle(report))
                     Spacer()
-                    Image(systemName: "chevron.right").font(.footnote).foregroundStyle(Theme.accent)
+                    Image(systemName: "chevron.right").font(Typo.footnote.font).foregroundStyle(Theme.accent)
                 }
                 ForEach(AnalysisText.recapFacts(report), id: \.self) { fact in
                     Text(fact)
-                        .font(.subheadline)
+                        .font(Typo.subheadline.font)
                         .foregroundStyle(Theme.primaryText)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -124,17 +118,17 @@ struct AnalysisView: View {
             .multilineTextAlignment(.leading)
             .card()
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.press)
         .accessibilityIdentifier("recapCard")
     }
 
     // MARK: - 花了多少
 
     private func totalCard(_ report: MonthReport) -> some View {
-        VStack(alignment: .leading, spacing: Theme.Gap.group) {
-            VStack(alignment: .leading, spacing: Theme.Gap.tight) {
+        VStack(alignment: .leading, spacing: Gap.group) {
+            VStack(alignment: .leading, spacing: Gap.tight) {
                 cardTitle(AnalysisText.totalTitle(report))
-                AmountText(text: Money.format(report.expense), font: .title.bold())
+                AmountText(text: Money.format(report.expense), value: report.expense, font: Typo.title1.font)
                     .accessibilityIdentifier("analysisTotal")
             }
             answer(AnalysisText.comparison(report), id: "comparisonText")
@@ -147,7 +141,7 @@ struct AnalysisView: View {
                 small(AnalysisText.oneOff(report.oneOff))
             }
             if report.income > 0 {
-                small("收入 \(Money.format(report.income))")
+                small(Words.Analysis.income(report.income))
             }
 
             Divider()
@@ -156,21 +150,21 @@ struct AnalysisView: View {
                 Button {
                     showBudget = true
                 } label: {
-                    HStack(spacing: Theme.Gap.item) {
-                        Text(report.budget.map(AnalysisText.budget) ?? "訂每月預算")
-                            .font(.subheadline)
+                    HStack(spacing: Gap.item) {
+                        Text(report.budget.map(AnalysisText.budget) ?? Words.Analysis.setBudget)
+                            .font(Typo.subheadline.font)
                             .multilineTextAlignment(.leading)
                         Spacer(minLength: 0)
-                        Image(systemName: "chevron.right").font(.footnote)
+                        Image(systemName: "chevron.right").font(Typo.footnote.font)
                     }
                     .foregroundStyle(Theme.accent)
-                    .frame(minHeight: 44)
+                    .frame(minHeight: Metric.touch)
                     .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.row)
                 .accessibilityIdentifier("budgetButton")
             } else {
-                small(report.budget.map(AnalysisText.budget) ?? "這個月沒有訂預算。")
+                small(report.budget.map(AnalysisText.budget) ?? Words.Analysis.noBudget)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -185,15 +179,15 @@ struct AnalysisView: View {
             report.categories.map(\.total).max() ?? 1,
             report.categories.compactMap { $0.usual?.high }.max() ?? 1
         )
-        return VStack(alignment: .leading, spacing: Theme.Gap.group) {
+        return VStack(alignment: .leading, spacing: Gap.group) {
             cardTitle(AnalysisText.categoryTitle)
             if let text = AnalysisText.categoryAnswer(report) { answer(text, id: "categoryAnswer") }
             if let seen = report.observation {
                 Button(AnalysisText.observationLink(seen)) {
                     path.append(CategoryPick(month: report.month, categoryId: seen.category.id))
                 }
-                .font(.subheadline.weight(.semibold))
-                .frame(minHeight: 44)
+                .font(Typo.subheadline.font.weight(.semibold))
+                .frame(minHeight: Metric.touch)
                 .accessibilityIdentifier("observationLink")
             }
             ForEach(shown) { line in
@@ -202,13 +196,13 @@ struct AnalysisView: View {
                 } label: {
                     CategoryRow(line: line, isCurrent: report.isCurrent, scale: scale)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.row)
                 .accessibilityIdentifier("line_\(line.category.name)")
             }
             if shown.count < report.categories.count {
-                Button("看全部 \(report.categories.count) 類") { showAllCategories = true }
-                    .font(.subheadline.weight(.semibold))
-                    .frame(minHeight: 44)
+                Button(Words.Analysis.showAll(report.categories.count)) { showAllCategories = true }
+                    .font(Typo.subheadline.font.weight(.semibold))
+                    .frame(minHeight: Metric.touch)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -218,7 +212,7 @@ struct AnalysisView: View {
     // MARK: - 最大的三筆
 
     private func biggestCard(_ report: MonthReport) -> some View {
-        VStack(alignment: .leading, spacing: Theme.Gap.group) {
+        VStack(alignment: .leading, spacing: Gap.group) {
             cardTitle(AnalysisText.biggestTitle)
             answer(AnalysisText.biggestAnswer(report), id: "biggestAnswer")
             ForEach(report.biggest) { item in
@@ -227,7 +221,7 @@ struct AnalysisView: View {
                 } label: {
                     TxnRow(item: item, dayText: model.title(for: item.occurredOn))
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.row)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -239,17 +233,17 @@ struct AnalysisView: View {
     private var recentCard: some View {
         let months = model.recentMonths
         let scale = max(1, months.compactMap(\.expense).max() ?? 1)
-        return VStack(alignment: .leading, spacing: Theme.Gap.group) {
+        return VStack(alignment: .leading, spacing: Gap.group) {
             cardTitle(AnalysisText.recentTitle)
             ForEach(months) { item in
-                VStack(alignment: .leading, spacing: Theme.Gap.tight) {
+                VStack(alignment: .leading, spacing: Gap.tight) {
                     HStack {
                         Text(Days.shortMonth(of: item.month)).foregroundStyle(Theme.primaryText)
                         Spacer()
                         Text(item.expense.map(Money.format) ?? AnalysisText.recentMissing)
                             .foregroundStyle(item.expense == nil ? Theme.secondaryText : Theme.primaryText)
                     }
-                    .font(.subheadline.monospacedDigit())
+                    .font(Typo.subheadline.font.monospacedDigit())
                     // 還沒過完的月份畫空心，不用顏色分。
                     if let expense = item.expense {
                         PlainBar(value: expense, scale: scale, isHollow: item.isCurrent)
@@ -268,13 +262,13 @@ struct AnalysisView: View {
 
     private func cardTitle(_ text: String) -> some View {
         Text(text)
-            .font(.subheadline)
+            .font(Typo.subheadline.font)
             .foregroundStyle(Theme.secondaryText)
     }
 
     private func answer(_ text: String, id: String) -> some View {
         Text(text)
-            .font(.body.weight(.medium))
+            .font(Typo.body.font.weight(.medium))
             .foregroundStyle(Theme.primaryText)
             .fixedSize(horizontal: false, vertical: true)
             .accessibilityIdentifier(id)
@@ -282,7 +276,7 @@ struct AnalysisView: View {
 
     private func small(_ text: String) -> some View {
         Text(text)
-            .font(.footnote)
+            .font(Typo.footnote.font)
             .foregroundStyle(Theme.secondaryText)
             .fixedSize(horizontal: false, vertical: true)
     }
@@ -299,21 +293,21 @@ private struct CategoryRow: View {
     let scale: Int
 
     var body: some View {
-        HStack(alignment: .top, spacing: Theme.Gap.group) {
+        HStack(alignment: .top, spacing: Gap.group) {
             CategoryIcon(category: line.category)
-            VStack(alignment: .leading, spacing: Theme.Gap.tight) {
+            VStack(alignment: .leading, spacing: Gap.tight) {
                 HStack {
                     Text(line.category.name).foregroundStyle(Theme.primaryText)
                     Spacer()
-                    AmountText(text: Money.format(line.total), font: .subheadline.weight(.medium))
-                    Image(systemName: "chevron.right").font(.caption2).foregroundStyle(Theme.accent)
+                    AmountText(text: Money.format(line.total), font: Typo.subheadline.font.weight(.medium))
+                    Image(systemName: "chevron.right").font(Typo.caption.font).foregroundStyle(Theme.accent)
                 }
-                .font(.subheadline)
+                .font(Typo.subheadline.font)
                 CompareBar(value: line.routine, extra: line.oneOff, usual: line.usual, scale: scale)
                     .accessibilityHidden(true)
                 if let usual = AnalysisText.usual(line, isCurrent: isCurrent) {
                     Text(usual)
-                        .font(.caption.monospacedDigit())
+                        .font(Typo.caption.font.monospacedDigit())
                         .foregroundStyle(Theme.secondaryText)
                 }
             }
@@ -325,6 +319,19 @@ private struct CategoryRow: View {
 
 // MARK: - 圖
 
+/// 圖上的尺寸，只有這個檔用。
+private enum Chart {
+    static let bar: CGFloat = 8
+    static let range: CGFloat = 5
+    static let gap: CGFloat = 3
+    static let outline: CGFloat = 1.5
+    /// 金額很小的時候也看得到。
+    static let minBar: CGFloat = 2
+    static let minOutline: CGFloat = 4
+    /// 範圍很窄的時候也看得到。
+    static let minRange: CGFloat = 8
+}
+
 /// 兩條都從 0 開始：上面是這個月（實心平常的花費、空心一次性），下面灰色那段是平常範圍。
 struct CompareBar: View {
     let value: Int
@@ -332,35 +339,29 @@ struct CompareBar: View {
     let usual: UsualRange?
     let scale: Int
 
-    private static let height: CGFloat = 8
-    private static let rangeHeight: CGFloat = 5
-    private static let spacing: CGFloat = 3
-    /// 範圍很窄的時候也看得到。
-    private static let minRange: CGFloat = 8
-
     private var totalHeight: CGFloat {
-        usual == nil ? Self.height : Self.height + Self.spacing + Self.rangeHeight
+        usual == nil ? Chart.bar : Chart.bar + Chart.gap + Chart.range
     }
 
     var body: some View {
         GeometryReader { geo in
             let unit = geo.size.width / CGFloat(max(1, scale))
-            VStack(alignment: .leading, spacing: Self.spacing) {
+            VStack(alignment: .leading, spacing: Chart.gap) {
                 HStack(spacing: 0) {
                     Capsule()
                         .fill(Theme.primaryText)
-                        .frame(width: value > 0 ? max(2, CGFloat(value) * unit) : 0, height: Self.height)
+                        .frame(width: value > 0 ? max(Chart.minBar, CGFloat(value) * unit) : 0, height: Chart.bar)
                     if extra > 0 {
                         Capsule()
-                            .strokeBorder(Theme.primaryText, lineWidth: 1.5)
-                            .frame(width: max(4, CGFloat(extra) * unit), height: Self.height)
+                            .strokeBorder(Theme.primaryText, lineWidth: Chart.outline)
+                            .frame(width: max(Chart.minOutline, CGFloat(extra) * unit), height: Chart.bar)
                     }
                 }
                 if let usual {
-                    let width = max(Self.minRange, CGFloat(usual.high - usual.low) * unit)
+                    let width = max(Chart.minRange, CGFloat(usual.high - usual.low) * unit)
                     Capsule()
                         .fill(Theme.band)
-                        .frame(width: width, height: Self.rangeHeight)
+                        .frame(width: width, height: Chart.range)
                         .offset(x: min(CGFloat(usual.low) * unit, max(0, geo.size.width - width)))
                 }
             }
@@ -374,17 +375,15 @@ struct PlainBar: View {
     let scale: Int
     let isHollow: Bool
 
-    private static let height: CGFloat = 8
-
     var body: some View {
         GeometryReader { geo in
-            let width = max(2, geo.size.width * CGFloat(value) / CGFloat(max(1, scale)))
+            let width = max(Chart.minBar, geo.size.width * CGFloat(value) / CGFloat(max(1, scale)))
             if isHollow {
-                Capsule().strokeBorder(Theme.primaryText, lineWidth: 1.5).frame(width: width, height: Self.height)
+                Capsule().strokeBorder(Theme.primaryText, lineWidth: Chart.outline).frame(width: width, height: Chart.bar)
             } else {
-                Capsule().fill(Theme.primaryText).frame(width: width, height: Self.height)
+                Capsule().fill(Theme.primaryText).frame(width: width, height: Chart.bar)
             }
         }
-        .frame(height: Self.height)
+        .frame(height: Chart.bar)
     }
 }

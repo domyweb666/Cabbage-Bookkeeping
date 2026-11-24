@@ -19,12 +19,13 @@ struct EntrySheet: View {
     @State private var note = ""
     @State private var isOneOff = false
     @State private var loaded = false
+    @State private var showCategories = false
     @State private var confirmDelete = false
     @State private var saveFailed = false
     @FocusState private var noteFocused: Bool
 
     private static let contentID = "entryContent"
-    private let columns = Array(repeating: GridItem(.flexible(), spacing: Theme.Gap.item), count: 4)
+    private let columns = Array(repeating: GridItem(.flexible(), spacing: Gap.item), count: 4)
 
     private var original: Txn? {
         if case .edit(let row) = mode { return row }
@@ -32,6 +33,12 @@ struct EntrySheet: View {
     }
 
     private var canSave: Bool { pad.value > 0 && categoryId != nil }
+
+    /// 動過的內容不給滑掉，要走就按「取消」。
+    private var isDirty: Bool {
+        guard let original else { return pad.value > 0 || categoryId != nil || !note.isEmpty }
+        return draft(categoryId ?? original.categoryId) != original.fields || categoryId == nil
+    }
 
     /// 可以選到的最後一天是今天。
     private var latestDate: Date { model.days.date(of: model.today) ?? Date() }
@@ -42,85 +49,96 @@ struct EntrySheet: View {
                 amount
                 ScrollViewReader { proxy in
                     ScrollView {
-                        VStack(spacing: Theme.Gap.section) {
+                        VStack(spacing: Gap.section) {
                             categoryGrid
                             details
                         }
-                        .padding(.horizontal, Theme.Gap.screen)
-                        .padding(.vertical, Theme.Gap.group)
+                        .padding(.horizontal, Gap.screenMargin)
+                        .padding(.vertical, Gap.group)
                         .id(Self.contentID)
                     }
                     .scrollDismissesKeyboard(.interactively)
                     // 鍵盤升完再捲到底，備註欄才不會貼著鍵盤。
                     .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardDidShowNotification)) { _ in
-                        withAnimation { proxy.scrollTo(Self.contentID, anchor: .bottom) }
+                        guard noteFocused else { return }
+                        withAnimation(Motion.change) { proxy.scrollTo(Self.contentID, anchor: .bottom) }
                     }
                 }
 
                 // 打備註時讓位給系統鍵盤。
                 if !noteFocused {
                     Keypad(pad: $pad, canSave: canSave, onSave: save)
-                        .padding(.horizontal, Theme.Gap.screen)
-                        .padding(.vertical, Theme.Gap.group)
+                        .padding(.horizontal, Gap.screenMargin)
+                        .padding(.vertical, Gap.group)
                 }
             }
             .background(Theme.background.ignoresSafeArea())
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { toolbar }
-            .confirmationDialog("刪除這筆紀錄？", isPresented: $confirmDelete, titleVisibility: .visible) {
-                Button("刪除", role: .destructive) {
+            .confirmationDialog(Words.Entry.deleteTitle, isPresented: $confirmDelete, titleVisibility: .visible) {
+                Button(Words.Entry.deleteConfirm, role: .destructive) {
                     if let original {
                         dismiss()
                         model.delete(original)
                     }
                 }
-                Button("取消", role: .cancel) {}
+                Button(Words.cancel, role: .cancel) {}
             }
-            .alert("沒有存成功", isPresented: $saveFailed) {
-                Button("好", role: .cancel) {}
+            .alert(Words.Failure.saveTitle, isPresented: $saveFailed) {
+                Button(Words.ok, role: .cancel) {}
             } message: {
-                Text("手機空間可能不夠，清出空間後再按一次。")
+                Text(Words.Failure.saveMessage)
             }
         }
         .tint(Theme.accent)
+        .interactiveDismissDisabled(isDirty)
+        .sheet(isPresented: $showCategories) {
+            NavigationStack { CategoryPickerView(kind: type, showsDone: true) }
+                .tint(Theme.accent)
+        }
         .onAppear(perform: load)
         .onChange(of: type) { _, newType in
             // 換成收入或支出時，對不上的分類要清掉。
-            if Categories.find(categoryId)?.kind != newType { categoryId = nil }
+            categoryId = model.book.selection(categoryId, kind: newType, keeping: original?.categoryId)
+        }
+        .onChange(of: model.book) { _, book in
+            // 選好的分類不再顯示，就當作還沒選。
+            categoryId = book.selection(categoryId, kind: type, keeping: original?.categoryId)
         }
     }
 
     @ToolbarContentBuilder
     private var toolbar: some ToolbarContent {
         ToolbarItem(placement: .cancellationAction) {
-            Button("取消") { dismiss() }
+            Button(Words.cancel) { dismiss() }
                 .accessibilityIdentifier("entryCancel")
         }
         ToolbarItem(placement: .principal) {
-            Picker("類型", selection: $type) {
+            Picker(Words.Entry.kind, selection: $type) {
                 ForEach(TxType.allCases, id: \.self) { Text($0.label).tag($0) }
             }
             .pickerStyle(.segmented)
-            .frame(width: 160)
+            .frame(width: Theme.Part.kindPicker)
         }
         ToolbarItem(placement: .primaryAction) {
             if noteFocused {
-                Button("完成") { noteFocused = false }
+                Button(Words.done) { noteFocused = false }
             } else if original != nil {
-                Button("刪除", role: .destructive) { confirmDelete = true }
+                Button(Words.Entry.delete, role: .destructive) { confirmDelete = true }
                     .accessibilityIdentifier("entryDelete")
             }
         }
     }
 
     private var amount: some View {
-        HStack(alignment: .firstTextBaseline, spacing: Theme.Gap.tight) {
-            Text("NT$")
-                .font(.title3.weight(.semibold))
+        HStack(alignment: .firstTextBaseline, spacing: Gap.tight) {
+            Text(Words.currency)
+                .font(Typo.title3.font)
                 .foregroundStyle(Theme.secondaryText)
             Spacer()
             AmountText(
                 text: Money.grouped(pad.value),
+                value: pad.value,
                 color: pad.value == 0 ? Theme.secondaryText : Theme.primaryText,
                 font: .system(.largeTitle, design: .rounded).bold()
             )
@@ -128,56 +146,65 @@ struct EntrySheet: View {
             .minimumScaleFactor(0.5)
             .accessibilityIdentifier("entryAmount")
         }
-        .padding(.horizontal, Theme.Gap.screen)
-        .padding(.top, Theme.Gap.group)
-        .padding(.bottom, Theme.Gap.item)
+        .padding(.horizontal, Gap.screenMargin)
+        .padding(.top, Gap.group)
+        .padding(.bottom, Gap.item)
     }
 
     private var categoryGrid: some View {
-        LazyVGrid(columns: columns, spacing: Theme.Gap.item) {
-            ForEach(Categories.of(type)) { category in
-                CategoryCell(category: category, isSelected: category.id == categoryId) {
+        LazyVGrid(columns: columns, spacing: Gap.item) {
+            ForEach(model.book.choices(type, keeping: original?.categoryId)) { category in
+                CategoryCell(icon: category.icon, name: category.name, isSelected: category.id == categoryId) {
+                    if categoryId != category.id { Haptics.selected() }
                     categoryId = category.id
                 }
+                .accessibilityLabel(category.name)
+                .accessibilityAddTraits(category.id == categoryId ? .isSelected : [])
+                .accessibilityIdentifier("category_\(category.name)")
             }
+            CategoryCell(icon: "slider.horizontal.3", name: Words.Entry.editCategories, isSelected: false, isQuiet: true) {
+                noteFocused = false
+                showCategories = true
+            }
+            .accessibilityLabel(Words.Entry.editCategoriesSpoken)
+            .accessibilityIdentifier("editCategories")
         }
     }
 
     private var details: some View {
-        VStack(spacing: Theme.Gap.group) {
+        VStack(spacing: Gap.group) {
             // 字放大到一排放不下時，改成上下兩排。
             ViewThatFits(in: .horizontal) {
-                HStack(spacing: Theme.Gap.group) {
+                HStack(spacing: Gap.group) {
                     datePicker
                     Spacer(minLength: 0)
                     oneOffButton
                 }
-                VStack(alignment: .leading, spacing: Theme.Gap.group) {
+                VStack(alignment: .leading, spacing: Gap.group) {
                     datePicker
                     oneOffButton
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             if isOneOff, type == .expense {
-                Text("跟平常比的時候，不算這一筆。")
-                    .font(.footnote)
+                Text(Words.Entry.oneOffHint)
+                    .font(Typo.footnote.font)
                     .foregroundStyle(Theme.secondaryText)
                     .frame(maxWidth: .infinity, alignment: .trailing)
             }
-            TextField("備註，可以不填", text: $note)
+            TextField(Words.Entry.note, text: $note)
                 .focused($noteFocused)
                 .submitLabel(.done)
                 .onSubmit { noteFocused = false }
-                .padding(.horizontal, Theme.Gap.card)
-                .frame(minHeight: 48)
-                .background(Theme.card)
-                .clipShape(RoundedRectangle(cornerRadius: Theme.keyRadius, style: .continuous))
+                .padding(.horizontal, Gap.cardPad)
+                .frame(minHeight: Metric.field)
+                .background(Theme.card, in: RoundedRectangle(cornerRadius: Theme.keyRadius, style: .continuous))
                 .accessibilityIdentifier("entryNote")
         }
     }
 
     private var datePicker: some View {
-        DatePicker("日期", selection: $date, in: ...latestDate, displayedComponents: .date)
+        DatePicker(Words.Entry.date, selection: $date, in: ...latestDate, displayedComponents: .date)
             .labelsHidden()
             .environment(\.locale, Locale(identifier: "zh_TW"))
             .environment(\.timeZone, model.days.timeZone)
@@ -190,14 +217,15 @@ struct EntrySheet: View {
             Button {
                 isOneOff.toggle()
             } label: {
-                Label("一次性", systemImage: isOneOff ? "checkmark.circle.fill" : "circle")
-                    .font(.subheadline)
+                Label(Words.Ledger.oneOff, systemImage: isOneOff ? "checkmark.circle.fill" : "circle")
+                    .font(Typo.subheadline.font)
                     .lineLimit(1)
                     .fixedSize(horizontal: true, vertical: false)
                     .foregroundStyle(isOneOff ? Theme.accent : Theme.secondaryText)
-                    .frame(minHeight: 44)
+                    .frame(minHeight: Metric.touch)
+                    .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.press)
             .accessibilityAddTraits(isOneOff ? .isSelected : [])
             .accessibilityIdentifier("entryOneOff")
         }
@@ -216,9 +244,8 @@ struct EntrySheet: View {
         isOneOff = original.isOneOff
     }
 
-    private func save() {
-        guard canSave, let categoryId else { return }
-        let fields = TxnFields(
+    private func draft(_ categoryId: UUID) -> TxnFields {
+        TxnFields(
             type: type,
             amount: pad.value,
             occurredOn: model.days.day(of: date),
@@ -226,37 +253,51 @@ struct EntrySheet: View {
             note: String(note.trimmingCharacters(in: .whitespacesAndNewlines).prefix(100)),
             isOneOff: isOneOff
         )
+    }
+
+    private func save() {
+        guard canSave, let categoryId else { return }
+        let fields = draft(categoryId)
         let done = original.map { model.update($0, with: fields) } ?? model.add(fields)
         if done { dismiss() } else { saveFailed = true }
     }
 }
 
 private struct CategoryCell: View {
-    let category: TxCategory
+    let icon: String
+    let name: String
     let isSelected: Bool
+    /// 「編輯」那一格，跟分類分得開。
+    var isQuiet = false
     let onTap: () -> Void
+
+    private var foreground: Color {
+        if isSelected { return Theme.onAccent }
+        return isQuiet ? Theme.accent : Theme.primaryText
+    }
+
+    private var fill: Color {
+        if isSelected { return Theme.accent }
+        return isQuiet ? Theme.accentSoft : Theme.card
+    }
 
     var body: some View {
         Button(action: onTap) {
-            VStack(spacing: Theme.Gap.tight) {
-                Image(systemName: category.icon)
-                    .font(.title3)
-                    .frame(minHeight: 28)
-                Text(category.name)
-                    .font(.footnote)
+            VStack(spacing: Gap.tight) {
+                Image(systemName: icon)
+                    .font(Typo.title3.font.weight(.regular))
+                    .frame(minHeight: Theme.Part.cellIcon)
+                Text(name)
+                    .font(Typo.footnote.font)
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
             }
-            .foregroundStyle(isSelected ? Theme.onAccent : Theme.primaryText)
-            .padding(.vertical, Theme.Gap.tight)
-            .frame(maxWidth: .infinity, minHeight: 64)
-            .background(isSelected ? Theme.accent : Theme.card)
-            .clipShape(RoundedRectangle(cornerRadius: Theme.keyRadius, style: .continuous))
+            .foregroundStyle(foreground)
+            .padding(.vertical, Gap.tight)
+            .frame(maxWidth: .infinity, minHeight: Theme.Part.cell)
+            .background(fill, in: RoundedRectangle(cornerRadius: Theme.keyRadius, style: .continuous))
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel(category.name)
-        .accessibilityAddTraits(isSelected ? .isSelected : [])
-        .accessibilityIdentifier("category_\(category.name)")
+        .buttonStyle(.press)
     }
 }
 
@@ -266,58 +307,54 @@ private struct Keypad: View {
     let canSave: Bool
     let onSave: () -> Void
 
-    private static let keyHeight: CGFloat = 52
-    private static let tallHeight: CGFloat = keyHeight * 2 + Theme.Gap.item
+    private static let keyHeight = Metric.button
+    private static let tallHeight: CGFloat = keyHeight * 2 + Gap.item
 
     var body: some View {
-        HStack(spacing: Theme.Gap.item) {
-            VStack(spacing: Theme.Gap.item) {
+        HStack(spacing: Gap.item) {
+            VStack(spacing: Gap.item) {
                 row(["1", "2", "3"])
                 row(["4", "5", "6"])
                 row(["7", "8", "9"])
                 row(["00", "0"])
             }
-            VStack(spacing: Theme.Gap.item) {
+            VStack(spacing: Gap.item) {
                 Button {
                     pad.backspace()
                 } label: {
                     Image(systemName: "delete.left")
-                        .font(.title2)
+                        .font(Typo.title2.font.weight(.regular))
                         .frame(maxWidth: .infinity, minHeight: Self.tallHeight)
-                        .background(Theme.card)
-                        .clipShape(RoundedRectangle(cornerRadius: Theme.keyRadius, style: .continuous))
+                        .background(Theme.card, in: RoundedRectangle(cornerRadius: Theme.keyRadius, style: .continuous))
                 }
-                .accessibilityLabel("退格")
+                .accessibilityLabel(Words.Entry.backspace)
                 .accessibilityIdentifier("key_back")
 
                 Button(action: onSave) {
-                    Text("記下")
-                        .font(.headline)
-                        .foregroundStyle(canSave ? Theme.onAccent : Theme.secondaryText)
+                    Text(Words.Entry.save)
                         .frame(maxWidth: .infinity, minHeight: Self.tallHeight)
-                        .background(canSave ? Theme.accent : Theme.disabled)
+                        .primaryFill()
                         .clipShape(RoundedRectangle(cornerRadius: Theme.keyRadius, style: .continuous))
                 }
                 .disabled(!canSave)
                 .accessibilityIdentifier("entrySave")
             }
-            .frame(width: 96)
+            .frame(width: Theme.Part.keySide)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.press)
         .foregroundStyle(Theme.primaryText)
     }
 
     private func row(_ keys: [String]) -> some View {
-        HStack(spacing: Theme.Gap.item) {
+        HStack(spacing: Gap.item) {
             ForEach(keys, id: \.self) { key in
                 Button {
                     pad.press(key)
                 } label: {
                     Text(key)
-                        .font(.title2.monospacedDigit())
+                        .font(Typo.title2.font.weight(.regular).monospacedDigit())
                         .frame(maxWidth: .infinity, minHeight: Self.keyHeight)
-                        .background(Theme.card)
-                        .clipShape(RoundedRectangle(cornerRadius: Theme.keyRadius, style: .continuous))
+                        .background(Theme.card, in: RoundedRectangle(cornerRadius: Theme.keyRadius, style: .continuous))
                 }
                 .accessibilityIdentifier("key_\(key)")
             }

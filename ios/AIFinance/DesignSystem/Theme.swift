@@ -1,99 +1,64 @@
 import SwiftUI
-import UIKit
 
-// 顏色、字級、間距集中在這裡。畫面裡不直接寫色碼。
+// 這個 app 的短名。數值全在 DomyTokens.swift（從 domy-design 1.6.0 整份複製，不手改，要改回 domy-design 改）。
+// 畫面檔只用這裡的名字，不寫色碼、字級、間距、圓角、秒數，也不寫 s1、s2 這種刻度名。
 
-extension Color {
-    /// 依淺色／深色模式切換的顏色。
-    init(light: UInt32, dark: UInt32) {
-        self.init(uiColor: UIColor { trait in
-            let hex = trait.userInterfaceStyle == .dark ? dark : light
-            return UIColor(
-                red: CGFloat((hex >> 16) & 0xFF) / 255,
-                green: CGFloat((hex >> 8) & 0xFF) / 255,
-                blue: CGFloat(hex & 0xFF) / 255,
-                alpha: 1
-            )
-        })
-    }
-}
+typealias Gap = DomyTokens.Layout
+typealias Metric = DomyTokens.Size
+typealias Typo = DomyTokens.TypeScale
 
 enum Theme {
-    static let background = Color(light: 0xF5F5F7, dark: 0x000000)
-    static let card = Color(light: 0xFFFFFF, dark: 0x1C1C1E)
-    static let primaryText = Color(light: 0x1D1D1F, dark: 0xF5F5F7)
-    static let secondaryText = Color(light: 0x6A6A6F, dark: 0xA1A1A6)
-    static let accent = Color(light: 0x8B5A71, dark: 0xC792AB)
+    // 產品色：梅紫。
+    static let background = DomyTheme.plum.canvas
+    static let accent = DomyTheme.plum.accent
     /// 放在主色上面的字。
-    static let onAccent = Color(light: 0xFFFFFF, dark: 0x1C1C1E)
+    static let onAccent = DomyTheme.plum.onAccent
+    /// 圖示的淡底，上面放 accent。
+    static let accentSoft = DomyTheme.plum.soft
+
+    // 中性色。
+    static let card = DomyTokens.Neutral.surface
+    static let primaryText = DomyTokens.Neutral.textPrimary
+    static let secondaryText = DomyTokens.Neutral.textSecondary
+    static let tertiaryText = DomyTokens.Neutral.textTertiary
+    static let disabledText = DomyTokens.Neutral.textDisabled
+    static let separator = DomyTokens.Neutral.separator
+    static let destructive = DomyTokens.Neutral.destructive
+
+    // 設計系統沒有、這個 app 自己要的顏色。對比用 design/contrast.py 算過。
+
+    /// 收入的數字。
+    static let income = Color(domyLight: 0x24785C, domyDark: 0x4CC29B)
     /// 還不能按的主要按鈕底色，字用 secondaryText。
-    static let disabled = Color(light: 0xE5E5EA, dark: 0x2C2C2E)
-    static let income = Color(light: 0x329B79, dark: 0x4CC29B)
+    /// 設計系統的 surfaceMuted 偏米色，在灰白底上看不出是按鈕（多米 2026-11-25 回報過）。
+    static let disabled = Color(domyLight: 0xE5E5EA, domyDark: 0x2C2C2E)
     /// 圖上「平常範圍」那一段。
-    static let band = Color(light: 0xA9A9B0, dark: 0x7C7C82)
+    static let band = Color(domyLight: 0x8E8E93, domyDark: 0x7C7C82)
 
-    static let cardRadius: CGFloat = 20
-    static let keyRadius: CGFloat = 14
+    static let cardRadius = DomyTokens.Radius.xl
+    static let keyRadius = DomyTokens.Radius.lg
+    /// 捲到底的留白。系統分頁列自己會讓位，不用 bottomClear。
+    static let pageBottom = DomyTokens.Space.s8
 
-    /// 間距照用途取名（多米 iOS 準則 3-46）。
-    enum Gap {
-        /// 安全區上緣到大標題。給 ScrollView 拼的分頁頁用。
-        static let pageTop: CGFloat = 40
-        /// 畫面左右邊距。
-        static let screen: CGFloat = 20
-        /// 不同性質的兩塊。
-        static let section: CGFloat = 24
-        /// 同一組的兄弟。
-        static let group: CGFloat = 12
-        /// 標籤跟它自己的內容。
-        static let item: CGFloat = 8
-        /// 黏在一起的一對。
-        static let tight: CGFloat = 4
-        /// 卡片內距。
-        static let card: CGFloat = 16
+    /// 這個 app 才有的尺寸。
+    enum Part {
+        /// 分類格。四排剛好連日期、備註都看得到。
+        static let cell: CGFloat = 56
+        static let cellIcon: CGFloat = 28
+        /// 清單前面的分類圖示圓圈。
+        static let badge = DomyTokens.Size.buttonCompact
+        /// 鍵盤右邊退格、記下那一欄。
+        static let keySide: CGFloat = 96
+        /// 導覽列中間的支出／收入切換。
+        static let kindPicker: CGFloat = 160
     }
 }
 
-struct CardStyle: ViewModifier {
-    var padding: CGFloat = Theme.Gap.card
-
-    func body(content: Content) -> some View {
-        content
-            .padding(padding)
-            .background(Theme.card)
-            .clipShape(RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous))
-    }
-}
-
-extension View {
-    func card(padding: CGFloat = Theme.Gap.card) -> some View {
-        modifier(CardStyle(padding: padding))
-    }
-}
-
-/// 金額文字：數字等寬，避免跳動。
-struct AmountText: View {
-    let text: String
-    var color: Color = Theme.primaryText
-    var font: Font = .body
-
-    var body: some View {
-        Text(text)
-            .font(font.monospacedDigit())
-            .foregroundStyle(color)
-    }
-}
-
-/// 整條寬的主要按鈕。
-struct PrimaryButtonStyle: ButtonStyle {
-    @Environment(\.isEnabled) private var isEnabled
-
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.headline)
-            .foregroundStyle(isEnabled ? Theme.onAccent : Theme.secondaryText)
-            .frame(maxWidth: .infinity, minHeight: 52)
-            .background(isEnabled ? Theme.accent.opacity(configuration.isPressed ? 0.8 : 1) : Theme.disabled)
-            .clipShape(Capsule())
-    }
+/// 動作代號（準則附錄 E）。畫面只從這裡拿動畫，不寫秒數。
+/// 減少動態打開時：縮放不做、數字改淡入淡出、清單增減不動。
+enum Motion {
+    static let press = Animation.snappy
+    static let change = Animation.snappy
+    static let pressScale: CGFloat = 0.96
+    static let pressOpacity: Double = 0.85
 }

@@ -6,9 +6,11 @@ struct CategoryDetailView: View {
     @Environment(LedgerModel.self) private var model
     let pick: CategoryPick
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     @State private var editing: Txn?
 
-    private var category: TxCategory? { Categories.find(pick.categoryId) }
+    private var category: TxCategory? { model.book.find(pick.categoryId) }
 
     var body: some View {
         let rows = model.expenses(month: pick.month, categoryId: pick.categoryId)
@@ -20,31 +22,33 @@ struct CategoryDetailView: View {
                     } label: {
                         TxnRow(item: item, dayText: model.title(for: item.occurredOn))
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.row)
                     .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                         Button(role: .destructive) {
                             model.delete(item)
                         } label: {
-                            Label("刪除", systemImage: "trash")
+                            Label(Words.Ledger.delete, systemImage: "trash")
                         }
                     }
                 }
             } header: {
-                Text("\(Days.shortMonth(of: pick.month)) \(rows.count) 筆，共 \(Money.format(rows.reduce(0) { $0 + $1.amount }))")
-                    .font(.footnote.monospacedDigit())
+                Text(Words.Analysis.detailHeader(
+                    month: pick.month, count: rows.count, total: rows.reduce(0) { $0 + $1.amount }
+                ))
+                    .font(Typo.footnote.font.monospacedDigit())
                     .foregroundStyle(Theme.secondaryText)
                     .textCase(nil)
                     .accessibilityIdentifier("categoryDetailHeader")
             }
         }
-        .listStyle(.insetGrouped)
-        .scrollContentBackground(.hidden)
+        .ledgerList()
+        .animation(reduceMotion ? nil : Motion.change, value: rows)
         .background(Theme.background.ignoresSafeArea())
-        .navigationTitle(category?.name ?? "其他")
+        .navigationTitle(category?.name ?? Words.Ledger.otherCategory)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.visible, for: .navigationBar)
         .safeAreaInset(edge: .bottom) {
-            ToastSlot().padding(.horizontal, Theme.Gap.screen)
+            ToastSlot().padding(.horizontal, Gap.screenMargin)
         }
         .sheet(item: $editing) { EntrySheet(mode: .edit($0)) }
     }
@@ -56,6 +60,8 @@ struct BudgetSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var text = ""
+    /// 打開時的金額，用來看有沒有動過。
+    @State private var savedText = ""
     @State private var hadBudget = false
     @State private var saveFailed = false
     @FocusState private var focused: Bool
@@ -64,58 +70,63 @@ struct BudgetSheet: View {
 
     var body: some View {
         NavigationStack {
-            VStack(alignment: .leading, spacing: Theme.Gap.group) {
-                // 過去實際花多少，放在要決定的這一刻。
-                Text(AnalysisText.budgetHint(model.monthlyRange))
-                    .font(.subheadline)
-                    .foregroundStyle(Theme.primaryText)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .accessibilityIdentifier("budgetHint")
+            ScrollView {
+                VStack(alignment: .leading, spacing: Gap.group) {
+                    // 過去實際花多少，放在要決定的這一刻。
+                    Text(AnalysisText.budgetHint(model.monthlyRange))
+                        .font(Typo.subheadline.font)
+                        .foregroundStyle(Theme.primaryText)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityIdentifier("budgetHint")
 
-                HStack(spacing: Theme.Gap.item) {
-                    Text("NT$").foregroundStyle(Theme.secondaryText)
-                    TextField("每月預算", text: $text)
-                        .keyboardType(.numberPad)
-                        .focused($focused)
-                        .accessibilityIdentifier("budgetAmount")
-                }
-                .font(.title2.monospacedDigit())
-                .card()
+                    HStack(spacing: Gap.item) {
+                        Text(Words.currency).foregroundStyle(Theme.secondaryText)
+                        TextField(Words.Budget.title, text: $text)
+                            .keyboardType(.numberPad)
+                            .focused($focused)
+                            .accessibilityIdentifier("budgetAmount")
+                    }
+                    .font(Typo.title2.font.weight(.regular).monospacedDigit())
+                    .card()
 
-                if hadBudget {
-                    Button("不訂預算") { save(0) }
-                        .frame(minHeight: 44)
-                        .accessibilityIdentifier("budgetClear")
+                    if hadBudget {
+                        Button(Words.Budget.clear) { save(0) }
+                            .frame(minHeight: Metric.touch)
+                            .accessibilityIdentifier("budgetClear")
+                    }
                 }
-                Spacer()
+                .padding(Gap.screenMargin)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .padding(Theme.Gap.screen)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .scrollBounceBehavior(.basedOnSize)
             .background(Theme.background.ignoresSafeArea())
-            .navigationTitle("每月預算")
+            .navigationTitle(Words.Budget.title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("取消") { dismiss() }
+                    Button(Words.cancel) { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("存") { if let amount { save(amount) } }
+                    Button(Words.Budget.save) { if let amount { save(amount) } }
                         .fontWeight(.semibold)
                         .disabled(amount == nil)
                         .accessibilityIdentifier("budgetSave")
                 }
             }
-            .alert("沒有存成功", isPresented: $saveFailed) {
-                Button("好", role: .cancel) {}
+            .alert(Words.Failure.saveTitle, isPresented: $saveFailed) {
+                Button(Words.ok, role: .cancel) {}
             } message: {
-                Text("手機空間可能不夠，清出空間後再按一次。")
+                Text(Words.Failure.saveMessage)
             }
         }
         .tint(Theme.accent)
+        .interactiveDismissDisabled(text != savedText)
         .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
         .onAppear {
             if let current = Budget.amount(for: model.days.monthStart(of: model.today), in: model.budgets) {
                 text = String(current)
+                savedText = text
                 hadBudget = true
             }
             focused = true

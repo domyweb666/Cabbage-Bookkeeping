@@ -9,54 +9,6 @@ public enum TxType: String, Codable, CaseIterable, Sendable {
     public var label: String { self == .expense ? "支出" : "收入" }
 }
 
-public struct TxCategory: Identifiable, Hashable, Sendable {
-    public let id: UUID
-    public let name: String
-    public let kind: TxType
-    public let icon: String
-}
-
-/// 內建分類。編號固定不變，紀錄靠編號引用，改名不會影響舊紀錄。
-public enum Categories {
-    public static let all: [TxCategory] = [
-        make(1, "飲食", .expense, "fork.knife"),
-        make(2, "交通", .expense, "car.fill"),
-        make(3, "購物", .expense, "bag.fill"),
-        make(4, "日用", .expense, "basket.fill"),
-        make(5, "居住", .expense, "house.fill"),
-        make(6, "娛樂", .expense, "gamecontroller.fill"),
-        make(7, "醫療", .expense, "cross.case.fill"),
-        make(8, "學習", .expense, "book.fill"),
-        make(9, "訂閱", .expense, "repeat"),
-        make(10, "旅行", .expense, "airplane"),
-        make(11, "人情", .expense, "gift.fill"),
-        make(12, "其他", .expense, "ellipsis.circle.fill"),
-        make(21, "薪水", .income, "banknote.fill"),
-        make(22, "獎金", .income, "star.fill"),
-        make(23, "投資", .income, "chart.line.uptrend.xyaxis"),
-        make(24, "其他收入", .income, "ellipsis.circle.fill"),
-    ]
-
-    public static func of(_ kind: TxType) -> [TxCategory] {
-        all.filter { $0.kind == kind }
-    }
-
-    public static func find(_ id: UUID?) -> TxCategory? {
-        guard let id else { return nil }
-        return all.first { $0.id == id }
-    }
-
-    /// 測試與示範資料用：照名字找。
-    public static func named(_ name: String) -> TxCategory {
-        all.first { $0.name == name }!
-    }
-
-    private static func make(_ number: Int, _ name: String, _ kind: TxType, _ icon: String) -> TxCategory {
-        let id = UUID(uuidString: String(format: "BA1CA100-0000-4000-8000-%012d", number))!
-        return TxCategory(id: id, name: name, kind: kind, icon: icon)
-    }
-}
-
 /// 一筆紀錄被改之前的樣子。修改不覆蓋掉原值。
 public struct TxnRevision: Codable, Hashable, Sendable {
     public let replacedAt: Date
@@ -148,11 +100,6 @@ public struct Txn: Codable, Identifiable, Hashable, Sendable {
         copy.isOneOff = oneOff
         return copy
     }
-
-    public var category: TxCategory? { Categories.find(categoryId) }
-
-    /// 清單上的標題：有備註用備註，沒有就用分類名。
-    public var title: String { note.isEmpty ? (category?.name ?? "其他") : note }
 }
 
 /// 每月預算。每改一次新增一筆，舊的月份繼續用當時的數字。

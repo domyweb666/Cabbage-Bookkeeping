@@ -1,5 +1,6 @@
 import FinanceCore
 import SwiftUI
+import VeggieKit
 
 @main
 struct AIFinanceApp: App {
@@ -18,6 +19,9 @@ struct AIFinanceApp: App {
             try? store.save(demo.transactions(today: today, days: days))
             demo.budgets(today: today, days: days).forEach { try? store.save($0) }
         }
+        // 畫面測試互不影響：設定從頭開始，要的話連手機上的資料庫也清掉。
+        if config.inMemory { Preferences.forget() }
+        if config.wipe { try? store.wipe() }
         _model = State(initialValue: LedgerModel(store: store))
     }
 
@@ -27,11 +31,16 @@ struct AIFinanceApp: App {
                 if let model {
                     RootView().environment(model)
                 } else {
-                    StoreErrorView()
+                    EmptyMessage(title: Words.Failure.storeTitle, message: Words.Failure.storeMessage)
+                        .background(Theme.background.ignoresSafeArea())
                 }
             }
             .tint(Theme.accent)
-            .preferredColorScheme(AppConfig.current.forceDark ? .dark : nil)
+            // 設定頁選過的外觀。設在視窗上，彈出來的畫面也會一起變。
+            .onAppear {
+                let appearance = AppConfig.current.forceDark ? Appearance.dark : Appearance.stored
+                appearance.apply()
+            }
         }
     }
 }
@@ -44,27 +53,14 @@ private struct RootView: View {
     var body: some View {
         TabView {
             LedgerView()
-                .tabItem { Label("記帳", systemImage: "list.bullet") }
+                .tabItem { Label(Words.Tab.ledger, systemImage: "list.bullet") }
             AnalysisView()
-                .tabItem { Label("分析", systemImage: "chart.bar.fill") }
+                .tabItem { Label(Words.Tab.analysis, systemImage: "chart.bar.fill") }
             SettingsView()
-                .tabItem { Label("設定", systemImage: "gearshape.fill") }
+                .tabItem { Label(Words.Tab.settings, systemImage: "gearshape.fill") }
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { model.refreshToday() }
         }
-    }
-}
-
-private struct StoreErrorView: View {
-    var body: some View {
-        VStack(spacing: Theme.Gap.item) {
-            Text("打不開紀錄").font(.title3.weight(.semibold))
-            Text("先把 App 整個關掉再開一次。手機空間不夠時也會這樣，清出空間後再試。紀錄還在，沒有被刪掉。")
-                .font(.subheadline)
-                .foregroundStyle(Theme.secondaryText)
-                .multilineTextAlignment(.center)
-        }
-        .padding(Theme.Gap.section)
     }
 }

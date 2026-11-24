@@ -12,7 +12,7 @@ public enum CSVExport {
         return needsQuote || risky ? "\"" + safe.replacingOccurrences(of: "\"", with: "\"\"") + "\"" : safe
     }
 
-    public static func make(transactions: [Txn]) -> String {
+    public static func make(transactions: [Txn], book: CategoryBook) -> String {
         let formatter = ISO8601DateFormatter()
         let rows = transactions
             .filter { $0.deletedAt == nil }
@@ -22,7 +22,7 @@ public enum CSVExport {
                     t.occurredOn,
                     t.type.label,
                     String(t.amount),
-                    t.category?.name ?? "",
+                    book.category(of: t).name,
                     t.note,
                     t.isOneOff ? "是" : "",
                     formatter.string(from: t.createdAt),

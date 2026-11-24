@@ -18,6 +18,10 @@ settings:
 packages:
   FinanceCore:
     path: Packages/FinanceCore
+  # 蔬菜家族設定頁的共用元件（公開 repo）。版本鎖在 tag，升版要自己改這裡。
+  VeggieKit:
+    url: https://github.com/domyweb666/VeggieKit
+    exactVersion: 1.0.1
 
 targets:
   AIFinance:
@@ -27,6 +31,7 @@ targets:
       - path: AIFinance
     dependencies:
       - package: FinanceCore
+      - package: VeggieKit
     info:
       path: AIFinance/Resources/Info.plist
       properties:

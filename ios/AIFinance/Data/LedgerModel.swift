@@ -26,11 +26,11 @@ final class LedgerModel {
     private(set) var today: String
     /// 有紀錄讀不出來時不開放寫入，免得蓋掉還在的資料。
     private(set) var loadFailed = false
+    /// 分類的名字、圖示、顯示哪些、順序。
+    private(set) var book = CategoryBook()
 
     @ObservationIgnored private let store: LocalStore
     @ObservationIgnored private(set) var days = Days.local
-
-    private static let saveFailed = "沒有存成功，手機空間可能不夠。"
 
     init(store: LocalStore) {
         self.store = store
@@ -38,6 +38,7 @@ final class LedgerModel {
         do {
             transactions = try store.transactions()
             budgets = try store.budgets()
+            book = try store.categoryBook()
         } catch {
             loadFailed = true
         }
@@ -58,7 +59,7 @@ final class LedgerModel {
     }
 
     func report(month: String) -> MonthReport {
-        Analysis.report(month: month, today: today, transactions: transactions, budgets: budgets, days: days)
+        Analysis.report(month: month, today: today, transactions: transactions, budgets: budgets, book: book, days: days)
     }
 
     var recentMonths: [MonthTotal] {
@@ -69,11 +70,17 @@ final class LedgerModel {
         Analysis.monthlyRange(today: today, transactions: transactions, days: days)
     }
 
+    func category(of row: Txn) -> TxCategory { book.category(of: row) }
+    func title(of row: Txn) -> String { book.title(of: row) }
+
     /// 某個月某一類的支出，金額大的在前。
     func expenses(month: String, categoryId: UUID) -> [Txn] {
         let prefix = String(month.prefix(7))
         return transactions
-            .filter { $0.deletedAt == nil && $0.categoryId == categoryId && $0.occurredOn.hasPrefix(prefix) }
+            .filter {
+                $0.deletedAt == nil && $0.type == .expense && $0.occurredOn.hasPrefix(prefix)
+                    && book.category(of: $0).id == categoryId
+            }
             .sorted { $0.amount == $1.amount ? $0.createdAt > $1.createdAt : $0.amount > $1.amount }
     }
 
@@ -83,27 +90,32 @@ final class LedgerModel {
     func add(_ fields: TxnFields) -> Bool {
         let row = Txn(fields: fields, createdAt: Date(), timeZone: days.timeZone.identifier)
         guard write(row) else { return false }
-        if let category = row.category {
-            let total = Analysis.categoryTotal(category.id, month: row.occurredOn, transactions: transactions, days: days)
-            let inThisMonth = row.occurredOn.hasPrefix(String(today.prefix(7)))
-            // 補記以前月份的，不說「這個月共多少」。
-            let message = inThisMonth || category.kind == .income
-                ? AnalysisText.saved(category: category, amount: row.amount, monthTotal: total)
-                : "記好了。\(category.name) \(Money.format(row.amount))"
-            show(Toast(message: message, undo: .added(row)))
-        }
+        let category = book.category(of: row)
+        let total = Analysis.categoryTotal(
+            category.id, month: row.occurredOn, transactions: transactions, book: book, days: days
+        )
+        let inThisMonth = row.occurredOn.hasPrefix(String(today.prefix(7)))
+        // 補記以前月份的，不說「這個月共多少」。
+        let message = inThisMonth || category.kind == .income
+            ? AnalysisText.saved(category: category, amount: row.amount, monthTotal: total)
+            : Words.Ledger.savedEarlier(category, row.amount)
+        show(Toast(message: message, undo: .added(row)))
+        Haptics.saved()
         return true
     }
 
     func update(_ row: Txn, with fields: TxnFields) -> Bool {
-        write(row.applying(fields, at: Date()))
+        guard write(row.applying(fields, at: Date())) else { return false }
+        Haptics.saved()
+        return true
     }
 
     func delete(_ row: Txn) {
         var gone = row
         gone.deletedAt = Date()
         if write(gone) {
-            show(Toast(message: "已刪除「\(row.title)」", undo: .deleted(row)))
+            Haptics.deleted()
+            show(Toast(message: Words.Ledger.deleted(title(of: row)), undo: .deleted(row)))
         }
     }
 
@@ -128,12 +140,33 @@ final class LedgerModel {
         do {
             try store.save(budget)
             budgets.append(budget)
+            Haptics.saved()
             return true
         } catch {
-            show(Toast(message: Self.saveFailed))
+            fail(Words.Failure.saveToast)
             return false
         }
     }
+
+    // MARK: - 分類
+
+    /// 改分類的設定。change 回傳 false 代表這個改法不行，什麼都不動。
+    /// 先寫進手機，成功了畫面才變；沒存成回傳 false，由畫面跳出說明。
+    func changeBook(_ change: (inout CategoryBook) -> Bool) -> Bool {
+        guard !loadFailed else { return false }
+        var next = book
+        guard change(&next) else { return false }
+        do {
+            try store.save(next)
+            book = next
+            return true
+        } catch {
+            Haptics.failed()
+            return false
+        }
+    }
+
+    // MARK: - 全部資料
 
     func deleteAll() -> Bool {
         do {
@@ -143,6 +176,8 @@ final class LedgerModel {
             loadFailed = false
             toast = nil
             removeExports()
+            book = CategoryBook()
+            Preferences.reset()
             return true
         } catch {
             return false
@@ -151,8 +186,8 @@ final class LedgerModel {
 
     /// 匯出 CSV，回傳暫存檔的位置。
     func exportCSV() throws -> URL {
-        let csv = CSVExport.make(transactions: transactions)
-        let url = FileManager.default.temporaryDirectory.appendingPathComponent("白菜記帳_\(today).csv")
+        let csv = CSVExport.make(transactions: transactions, book: book)
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(Words.Settings.exportName(today))
         try Data(csv.utf8).write(to: url, options: .atomic)
         return url
     }
@@ -169,13 +204,13 @@ final class LedgerModel {
 
     private func write(_ row: Txn) -> Bool {
         guard !loadFailed else {
-            show(Toast(message: "紀錄讀不出來，先把 App 關掉再開一次。"))
+            fail(Words.Failure.loadToast)
             return false
         }
         do {
             try store.save(row)
         } catch {
-            show(Toast(message: Self.saveFailed))
+            fail(Words.Failure.saveToast)
             return false
         }
         if let i = transactions.firstIndex(where: { $0.id == row.id }) {
@@ -184,6 +219,16 @@ final class LedgerModel {
             transactions.append(row)
         }
         return true
+    }
+
+    /// 不能復原的一句話，例如「已複製版本資訊」。
+    func notice(_ message: String) {
+        show(Toast(message: message))
+    }
+
+    private func fail(_ message: String) {
+        Haptics.failed()
+        show(Toast(message: message))
     }
 
     private func show(_ toast: Toast) {

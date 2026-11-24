@@ -121,7 +121,7 @@ public enum Analysis {
     // MARK: - 一個月的報告
 
     public static func report(
-        month anyDay: String, today: String, transactions: [Txn], budgets: [Budget], days: Days
+        month anyDay: String, today: String, transactions: [Txn], budgets: [Budget], book: CategoryBook, days: Days
     ) -> MonthReport {
         let month = days.monthStart(of: anyDay)
         let isCurrent = month == days.monthStart(of: today)
@@ -141,7 +141,9 @@ public enum Analysis {
         let comparison = compare(
             rows: rows, expenses: expenses, isCurrent: isCurrent, throughDay: throughDay, baseline: baselineExpenses
         )
-        let lines = categoryLines(expenses: expenses, baseline: comparison.range == nil ? [] : baselineExpenses)
+        let lines = categoryLines(
+            expenses: expenses, baseline: comparison.range == nil ? [] : baselineExpenses, book: book
+        )
         let budget = Budget.amount(for: month, in: budgets).map {
             BudgetStatus(
                 budget: $0, spent: expense,
@@ -159,7 +161,9 @@ public enum Analysis {
             expenseCount: expenses.count,
             comparison: comparison,
             categories: lines,
-            observation: observe(lines: lines, expenses: expenses, baseline: baselineExpenses, throughDay: throughDay),
+            observation: observe(
+                lines: lines, expenses: expenses, baseline: baselineExpenses, throughDay: throughDay, book: book
+            ),
             biggest: expenses.count < minRecords ? [] : Array(expenses.sorted {
                 $0.amount == $1.amount ? $0.createdAt > $1.createdAt : $0.amount > $1.amount
             }.prefix(biggestCount)),
@@ -194,8 +198,12 @@ public enum Analysis {
     }
 
     /// 某個分類這個月到目前為止的金額（記完一筆之後那一行用）。
-    public static func categoryTotal(_ categoryId: UUID, month anyDay: String, transactions: [Txn], days: Days) -> Int {
-        sum(inMonth(days.monthStart(of: anyDay), transactions).filter { $0.deletedAt == nil && $0.categoryId == categoryId })
+    public static func categoryTotal(
+        _ categoryId: UUID, month anyDay: String, transactions: [Txn], book: CategoryBook, days: Days
+    ) -> Int {
+        sum(inMonth(days.monthStart(of: anyDay), transactions).filter {
+            $0.deletedAt == nil && book.category(of: $0).id == categoryId
+        })
     }
 
     // MARK: - 可以拿來比的月份
@@ -239,10 +247,10 @@ public enum Analysis {
 
     // MARK: - 分類與觀察
 
-    private static func categoryLines(expenses: [Txn], baseline: [[Txn]]) -> [CategoryLine] {
-        Dictionary(grouping: expenses, by: \.categoryId).compactMap { id, items -> CategoryLine? in
-            guard let category = Categories.find(id) else { return nil }
-            let past = baseline.map { month in month.filter { $0.categoryId == id } }
+    private static func categoryLines(expenses: [Txn], baseline: [[Txn]], book: CategoryBook) -> [CategoryLine] {
+        // 找不到分類的算在「其他」，不能漏掉。
+        Dictionary(grouping: expenses) { book.category(of: $0) }.map { category, items -> CategoryLine in
+            let past = baseline.map { month in month.filter { book.category(of: $0).id == category.id } }
             // 至少兩個月真的有這一類，才有「平常」可言。
             let usual = past.filter { !$0.isEmpty }.count >= minBaselineMonths ? range(past.map { sum($0) }) : nil
             return CategoryLine(
@@ -254,13 +262,13 @@ public enum Analysis {
     }
 
     private static func observe(
-        lines: [CategoryLine], expenses: [Txn], baseline: [[Txn]], throughDay: Int
+        lines: [CategoryLine], expenses: [Txn], baseline: [[Txn]], throughDay: Int, book: CategoryBook
     ) -> SpendingNote? {
         guard throughDay >= observeFromDay else { return nil }
         let candidates = lines.compactMap { line -> (SpendingNote, Int)? in
             guard let usual = line.usual else { return nil }
-            let count = expenses.filter { $0.categoryId == line.id && !$0.isOneOff }.count
-            let pastCount = baseline.reduce(0) { $0 + $1.filter { $0.categoryId == line.id }.count }
+            let count = expenses.filter { book.category(of: $0).id == line.id && !$0.isOneOff }.count
+            let pastCount = baseline.reduce(0) { $0 + $1.filter { book.category(of: $0).id == line.id }.count }
             guard count >= minRecords, pastCount >= minRecords else { return nil }
             let edge = line.routine > usual.high ? usual.high : usual.low
             let difference = abs(line.routine - edge)

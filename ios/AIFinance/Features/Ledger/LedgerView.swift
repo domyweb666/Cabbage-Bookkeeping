@@ -5,6 +5,8 @@ import SwiftUI
 struct LedgerView: View {
     @Environment(LedgerModel.self) private var model
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     @State private var editing: Txn?
     @State private var showNew = false
 
@@ -19,20 +21,23 @@ struct LedgerView: View {
         }
         .background(Theme.background.ignoresSafeArea())
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            VStack(spacing: Theme.Gap.group) {
+            VStack(spacing: Gap.group) {
                 ToastSlot()
                 Button {
                     model.refreshToday()
                     showNew = true
                 } label: {
-                    Label("記一筆", systemImage: "plus")
+                    Label(Words.Ledger.add, systemImage: "plus")
+                        .frame(maxWidth: .infinity, minHeight: Metric.button)
+                        .primaryFill()
+                        .clipShape(Capsule())
                 }
-                .buttonStyle(PrimaryButtonStyle())
+                .buttonStyle(.press)
                 .disabled(model.loadFailed)
                 .accessibilityIdentifier("addButton")
             }
-            .padding(.horizontal, Theme.Gap.screen)
-            .padding(.vertical, Theme.Gap.group)
+            .padding(.horizontal, Gap.screenMargin)
+            .padding(.vertical, Gap.group)
             .background(Theme.background)
         }
         .sheet(isPresented: $showNew) { EntrySheet(mode: .new) }
@@ -41,42 +46,38 @@ struct LedgerView: View {
 
     private var header: some View {
         let report = model.report(month: model.today)
-        return VStack(alignment: .leading, spacing: Theme.Gap.tight) {
-            Text("本月支出")
-                .font(.subheadline)
+        return VStack(alignment: .leading, spacing: Gap.tight) {
+            Text(Words.Ledger.monthTotal)
+                .font(Typo.subheadline.font)
                 .foregroundStyle(Theme.secondaryText)
-            AmountText(text: Money.format(report.expense), font: .largeTitle.bold())
+            AmountText(text: Money.format(report.expense), value: report.expense, font: Typo.largeTitle.font)
                 .lineLimit(1)
                 .minimumScaleFactor(0.6)
             if let budget = report.budget {
-                AmountText(text: AnalysisText.homeBudget(budget), color: Theme.secondaryText, font: .subheadline)
+                AmountText(text: AnalysisText.homeBudget(budget), color: Theme.secondaryText, font: Typo.subheadline.font)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, Theme.Gap.screen)
-        .padding(.top, Theme.Gap.section)
-        .padding(.bottom, Theme.Gap.group)
+        .padding(.horizontal, Gap.screenMargin)
+        .padding(.top, Gap.pageTop)
+        .padding(.bottom, Gap.group)
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("monthTotal")
     }
 
+    @ViewBuilder
     private var emptyState: some View {
-        VStack(spacing: Theme.Gap.item) {
-            Text(model.loadFailed ? "紀錄讀不出來" : "還沒有紀錄")
-                .font(.title3.weight(.semibold))
-                .foregroundStyle(Theme.primaryText)
-            Text(model.loadFailed ? "先把 App 整個關掉再開一次。紀錄還在，沒有被刪掉。" : "按下面的「記一筆」，選金額和分類就好。")
-                .font(.subheadline)
-                .foregroundStyle(Theme.secondaryText)
-                .multilineTextAlignment(.center)
+        if model.loadFailed {
+            EmptyMessage(title: Words.Failure.loadTitle, message: Words.Failure.loadMessage)
+        } else {
+            EmptyMessage(title: Words.Ledger.emptyTitle, message: Words.Ledger.emptyMessage)
         }
-        .padding(.horizontal, Theme.Gap.section)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var list: some View {
-        List {
-            ForEach(model.sections) { section in
+        let sections = model.sections
+        return List {
+            ForEach(sections) { section in
                 Section {
                     ForEach(section.items) { item in
                         Button {
@@ -84,17 +85,17 @@ struct LedgerView: View {
                         } label: {
                             TxnRow(item: item)
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(.row)
                         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                             Button(role: .destructive) {
                                 model.delete(item)
                             } label: {
-                                Label("刪除", systemImage: "trash")
+                                Label(Words.Ledger.delete, systemImage: "trash")
                             }
                         }
                     }
                 } header: {
-                    HStack(spacing: Theme.Gap.item) {
+                    HStack(spacing: Gap.item) {
                         Text(model.title(for: section.day))
                         Spacer()
                         if section.incomeTotal > 0 {
@@ -104,69 +105,72 @@ struct LedgerView: View {
                             Text("-" + Money.grouped(section.expenseTotal))
                         }
                     }
-                    .font(.footnote.monospacedDigit())
+                    .font(Typo.footnote.font.monospacedDigit())
                     .foregroundStyle(Theme.secondaryText)
                     .textCase(nil)
                 }
             }
         }
-        .listStyle(.insetGrouped)
-        .scrollContentBackground(.hidden)
+        .ledgerList()
+        .animation(reduceMotion ? nil : Motion.change, value: sections)
     }
 }
 
 /// 一筆紀錄的列。
 struct TxnRow: View {
+    @Environment(LedgerModel.self) private var model
+
     let item: Txn
     /// 在分類明細裡要顯示日期，在每天的明細裡不用。
     var dayText: String?
 
+    private var category: TxCategory { model.category(of: item) }
+
     private var subtitle: String {
         var parts: [String] = []
         if let dayText { parts.append(dayText) }
-        if !item.note.isEmpty, dayText == nil { parts.append(item.category?.name ?? "其他") }
-        if item.isOneOff { parts.append("一次性") }
+        if !item.note.isEmpty, dayText == nil { parts.append(category.name) }
+        if item.isOneOff { parts.append(Words.Ledger.oneOff) }
         return parts.joined(separator: " · ")
     }
 
     var body: some View {
-        HStack(spacing: Theme.Gap.group) {
-            CategoryIcon(category: item.category)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(item.title)
-                    .font(.body)
+        HStack(spacing: Gap.group) {
+            CategoryIcon(category: category)
+            VStack(alignment: .leading, spacing: Gap.tight) {
+                Text(model.title(of: item))
+                    .font(Typo.body.font)
                     .foregroundStyle(Theme.primaryText)
                     .lineLimit(1)
                 if !subtitle.isEmpty {
                     Text(subtitle)
-                        .font(.caption)
+                        .font(Typo.caption.font)
                         .foregroundStyle(Theme.secondaryText)
                         .lineLimit(1)
                 }
             }
-            Spacer(minLength: Theme.Gap.item)
+            Spacer(minLength: Gap.item)
             AmountText(
                 text: Money.signed(item.amount, type: item.type),
                 color: item.type == .income ? Theme.income : Theme.primaryText,
-                font: .body.weight(.medium)
+                font: Typo.body.font.weight(.medium)
             )
         }
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(item.title)，\(item.category?.name ?? "其他")，\(item.type.label) \(Money.format(item.amount))")
+        .accessibilityLabel("\(model.title(of: item))，\(category.name)，\(item.type.label) \(Money.format(item.amount))")
     }
 }
 
 struct CategoryIcon: View {
-    let category: TxCategory?
+    let category: TxCategory
 
     var body: some View {
-        Image(systemName: category?.icon ?? "questionmark.circle")
-            .font(.body)
+        Image(systemName: category.icon)
+            .font(Typo.body.font)
             .foregroundStyle(Theme.accent)
-            .frame(width: 36, height: 36)
-            .background(Theme.accent.opacity(0.12))
-            .clipShape(Circle())
+            .frame(width: Theme.Part.badge, height: Theme.Part.badge)
+            .background(Theme.accentSoft, in: Circle())
             .accessibilityHidden(true)
     }
 }
@@ -178,26 +182,25 @@ struct ToastSlot: View {
     var body: some View {
         Group {
             if let toast = model.toast {
-                HStack(spacing: Theme.Gap.group) {
+                HStack(spacing: Gap.group) {
                     Text(toast.message)
-                        .font(.subheadline)
+                        .font(Typo.subheadline.font)
                         .foregroundStyle(Theme.primaryText)
                         .accessibilityIdentifier("toastText")
                     Spacer(minLength: 0)
                     if toast.undo != nil {
-                        Button("復原") { model.undo(toast) }
-                            .font(.subheadline.weight(.semibold))
-                            .frame(minHeight: 44)
+                        Button(Words.Ledger.undo) { model.undo(toast) }
+                            .font(Typo.subheadline.font.weight(.semibold))
+                            .frame(minHeight: Metric.touch)
                             .accessibilityIdentifier("undoButton")
                     }
                 }
-                .padding(.horizontal, Theme.Gap.card)
-                .frame(minHeight: 48)
-                .background(Theme.card)
-                .clipShape(RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous))
+                .padding(.horizontal, Gap.cardPad)
+                .frame(minHeight: Metric.field)
+                .background(Theme.card, in: RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous))
                 .transition(.opacity)
             }
         }
-        .animation(.easeOut(duration: 0.2), value: model.toast)
+        .animation(Motion.change, value: model.toast)
     }
 }

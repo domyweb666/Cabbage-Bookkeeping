@@ -59,6 +59,38 @@ final class AIFinanceUITests: XCTestCase {
         for key in keys { app.buttons["key_\(key)"].tap() }
     }
 
+    /// 空狀態的標題和說明可能被系統合成一句，所以用包含來找。
+    private func shows(_ fragment: String, timeout: TimeInterval = 30) -> Bool {
+        app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", fragment))
+            .firstMatch.waitForExistence(timeout: timeout)
+    }
+
+    /// 真的存進手機的測試：先把手機上的資料庫清空，跟別的測試不互相影響。
+    private func launchOnDisk() {
+        app.launchArguments.removeAll { $0 == "-memoryStore" }
+        app.launchArguments.append("-wipeStore")
+        app.launch()
+        app.launchArguments.removeAll { $0 == "-wipeStore" }
+    }
+
+    private func openCategoriesFromEntry() {
+        scrollTo(app.buttons["editCategories"])
+        app.buttons["editCategories"].tap()
+        XCTAssertTrue(app.buttons["categoriesDone"].waitForExistence(timeout: 30))
+    }
+
+    private func openCategoriesFromSettings() {
+        XCTAssertTrue(app.buttons["addButton"].waitForExistence(timeout: 30))
+        app.tabBars.buttons["設定"].tap()
+        XCTAssertTrue(app.buttons["categoriesRow"].waitForExistence(timeout: 30))
+        app.buttons["categoriesRow"].tap()
+        XCTAssertTrue(app.buttons["edit_飲食"].waitForExistence(timeout: 30))
+    }
+
+    private func clear(_ field: XCUIElement, characters: Int) {
+        field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: characters))
+    }
+
     private func openAnalysis() {
         app.tabBars.buttons["分析"].tap()
         XCTAssertTrue(any("analysisTotal").waitForExistence(timeout: 30))
@@ -74,7 +106,7 @@ final class AIFinanceUITests: XCTestCase {
 
     func testFirstEntryAndUndo() {
         launch()
-        XCTAssertTrue(app.staticTexts["還沒有紀錄"].waitForExistence(timeout: 30))
+        XCTAssertTrue(shows("還沒有紀錄"))
         shot("01-首次開啟")
 
         openEntry()
@@ -94,7 +126,7 @@ final class AIFinanceUITests: XCTestCase {
         shot("04-記好第一筆")
 
         app.buttons["undoButton"].tap()
-        XCTAssertTrue(app.staticTexts["還沒有紀錄"].waitForExistence(timeout: 30))
+        XCTAssertTrue(shows("還沒有紀錄"))
     }
 
     func testIncomeAndNote() {
@@ -139,9 +171,8 @@ final class AIFinanceUITests: XCTestCase {
         row("便當", "NT$150").tap()
         XCTAssertTrue(app.buttons["entryDelete"].waitForExistence(timeout: 30))
         app.buttons["entryDelete"].tap()
-        let confirm = app.buttons.matching(NSPredicate(format: "label == %@ AND identifier != %@", "刪除", "entryDelete")).firstMatch
-        XCTAssertTrue(confirm.waitForExistence(timeout: 10))
-        confirm.tap()
+        XCTAssertTrue(app.buttons["刪除這筆"].firstMatch.waitForExistence(timeout: 10))
+        app.buttons["刪除這筆"].firstMatch.tap()
         XCTAssertTrue(wait("toastText", contains: "已刪除「便當」"))
         XCTAssertTrue(wait("monthTotal", contains: "NT$6,885"))
         app.buttons["undoButton"].tap()
@@ -219,7 +250,21 @@ final class AIFinanceUITests: XCTestCase {
         XCTAssertTrue(app.buttons["addButton"].waitForExistence(timeout: 30))
         app.tabBars.buttons["設定"].tap()
         XCTAssertTrue(app.buttons["deleteAllButton"].waitForExistence(timeout: 30))
+        XCTAssertTrue(app.switches["觸覺回饋"].firstMatch.exists)
+        XCTAssertTrue(app.buttons["familyRow"].exists)
+        XCTAssertFalse(app.buttons["意見回饋"].exists, "信箱還沒定，不放這一列")
         shot("19-設定")
+
+        any("appearanceRow").tap()
+        XCTAssertTrue(app.buttons["深色"].waitForExistence(timeout: 10))
+        app.buttons["深色"].tap()
+        XCTAssertTrue(wait("appearanceRow", contains: "深色", timeout: 10))
+        shot("28-設定-深色")
+        any("appearanceRow").tap()
+        XCTAssertTrue(app.buttons["跟隨系統"].waitForExistence(timeout: 10))
+        app.buttons["跟隨系統"].tap()
+        XCTAssertTrue(wait("appearanceRow", contains: "跟隨系統", timeout: 10))
+
         app.buttons["隱私說明"].firstMatch.tap()
         XCTAssertTrue(text(containing: "都存在這支手機上").waitForExistence(timeout: 30))
         shot("20-隱私說明")
@@ -233,13 +278,12 @@ final class AIFinanceUITests: XCTestCase {
         XCTAssertTrue(app.alerts.buttons["好"].waitForExistence(timeout: 10))
         app.alerts.buttons["好"].tap()
         app.tabBars.buttons["記帳"].tap()
-        XCTAssertTrue(app.staticTexts["還沒有紀錄"].waitForExistence(timeout: 30))
+        XCTAssertTrue(shows("還沒有紀錄"))
     }
 
     /// 真的存進手機：整個關掉再開，紀錄還在。
     func testRecordsSurviveRelaunch() {
-        app.launchArguments.removeAll { $0 == "-memoryStore" }
-        launch()
+        launchOnDisk()
         openEntry()
         press("7", "7")
         app.buttons["category_娛樂"].tap()
@@ -250,6 +294,145 @@ final class AIFinanceUITests: XCTestCase {
         app.launch()
         XCTAssertTrue(row("娛樂", "NT$77").waitForExistence(timeout: 30), "重開之後紀錄要還在")
         XCTAssertTrue(wait("monthTotal", contains: "NT$77"))
+    }
+
+    // MARK: - 常用分類
+
+    func testShowAndHideACategory() {
+        launch()
+        openEntry()
+        press("8", "8")
+        openCategoriesFromEntry()
+        scrollTo(app.buttons["pick_早餐"])
+        app.buttons["pick_早餐"].tap()
+        app.buttons["categoriesDone"].tap()
+
+        XCTAssertTrue(app.buttons["category_早餐"].waitForExistence(timeout: 10), "勾了就要出現在格子")
+        XCTAssertTrue(wait("entryAmount", contains: "88"), "按過的金額要還在")
+        app.buttons["category_早餐"].tap()
+        shot("29-記一筆-多一格")
+        app.buttons["entrySave"].tap()
+        XCTAssertTrue(row("早餐", "NT$88").waitForExistence(timeout: 30))
+
+        openEntry()
+        app.buttons["category_早餐"].tap()
+        press("5")
+        XCTAssertTrue(app.buttons["entrySave"].isEnabled)
+        openCategoriesFromEntry()
+        scrollTo(app.buttons["pick_早餐"])
+        app.buttons["pick_早餐"].tap()
+        app.buttons["categoriesDone"].tap()
+        XCTAssertTrue(app.buttons["category_飲食"].waitForExistence(timeout: 10))
+        XCTAssertFalse(app.buttons["category_早餐"].exists, "取消勾選後格子就沒有")
+        XCTAssertFalse(app.buttons["entrySave"].isEnabled, "選好的分類不顯示了，就當作還沒選")
+        app.buttons["entryCancel"].tap()
+
+        XCTAssertTrue(row("早餐", "NT$88").waitForExistence(timeout: 10), "記過的不受影響")
+        row("早餐", "NT$88").tap()
+        XCTAssertTrue(app.buttons["category_早餐"].waitForExistence(timeout: 30), "改舊紀錄要看得到原本的分類")
+        XCTAssertTrue(app.buttons["category_早餐"].isSelected)
+    }
+
+    /// 自己新增的分類：同名擋下、記一筆、重開還在、刪掉之後舊紀錄照樣有名字。
+    func testCustomCategorySurvivesRelaunchAndDelete() {
+        launchOnDisk()
+        openEntry()
+        openCategoriesFromEntry()
+        scrollTo(app.buttons["newCategory"])
+        app.buttons["newCategory"].tap()
+        let name = app.textFields["categoryName"]
+        XCTAssertTrue(name.waitForExistence(timeout: 30))
+        XCTAssertFalse(app.buttons["categorySave"].isEnabled)
+        name.tap()
+        name.typeText("飲食")
+        XCTAssertTrue(shows("已經有同名的分類", timeout: 10))
+        XCTAssertFalse(app.buttons["categorySave"].isEnabled)
+        shot("30-新增分類-同名")
+        clear(name, characters: 2)
+        name.typeText("貓咪")
+        app.buttons["categorySave"].tap()
+        XCTAssertTrue(app.buttons["categoriesDone"].waitForExistence(timeout: 10))
+        app.buttons["categoriesDone"].tap()
+
+        XCTAssertTrue(app.buttons["category_貓咪"].waitForExistence(timeout: 10))
+        press("1", "2", "0")
+        app.buttons["category_貓咪"].tap()
+        app.buttons["entrySave"].tap()
+        XCTAssertTrue(row("貓咪", "NT$120").waitForExistence(timeout: 30))
+
+        app.terminate()
+        app.launch()
+        XCTAssertTrue(row("貓咪", "NT$120").waitForExistence(timeout: 30), "重開之後紀錄和名字都要還在")
+        openEntry()
+        XCTAssertTrue(app.buttons["category_貓咪"].waitForExistence(timeout: 10), "重開之後分類要還在")
+        app.buttons["entryCancel"].tap()
+
+        openCategoriesFromSettings()
+        scrollTo(app.buttons["edit_貓咪"])
+        app.buttons["edit_貓咪"].tap()
+        XCTAssertTrue(app.textFields["categoryName"].waitForExistence(timeout: 10))
+        for _ in 0..<8 where !(app.buttons["categoryDelete"].exists && app.buttons["categoryDelete"].isHittable) { app.swipeUp() }
+        app.buttons["categoryDelete"].tap()
+        XCTAssertTrue(app.alerts.buttons["刪除這個分類"].waitForExistence(timeout: 10))
+        app.alerts.buttons["刪除這個分類"].tap()
+        app.tabBars.buttons["記帳"].tap()
+        XCTAssertTrue(row("貓咪", "NT$120").waitForExistence(timeout: 10), "刪掉分類，記過的照樣看得到名字")
+        openEntry()
+        XCTAssertFalse(app.buttons["category_貓咪"].exists)
+    }
+
+    /// 改內建的名字，明細跟著變；往後移一格，格子的順序跟著變。
+    /// 拖曳把手在 XCUITest 上不穩，順序用編輯畫面上看得見的「往後移一格」測，走的是同一份資料。
+    func testRenameAndReorder() {
+        launch(demo: "fresh")
+        openCategoriesFromSettings()
+        app.buttons["edit_飲食"].tap()
+        let name = app.textFields["categoryName"]
+        XCTAssertTrue(name.waitForExistence(timeout: 30))
+        app.buttons["categoryMoveDown"].tap()
+        name.tap()
+        clear(name, characters: 2)
+        name.typeText("吃飯")
+        app.buttons["categorySave"].tap()
+        XCTAssertTrue(app.buttons["edit_吃飯"].waitForExistence(timeout: 10))
+        shot("31-常用分類-改過")
+
+        app.tabBars.buttons["記帳"].tap()
+        XCTAssertTrue(row("便當", "吃飯", "NT$120").waitForExistence(timeout: 10), "明細跟著改")
+        openEntry()
+        XCTAssertLessThan(app.buttons["category_交通"].frame.minX, app.buttons["category_吃飯"].frame.minX)
+        shot("32-記一筆-換過順序")
+        app.buttons["entryCancel"].tap()
+        openAnalysis()
+        scrollTo(any("line_吃飯"))
+    }
+
+    private func shootCategories(_ prefix: String) {
+        openCategoriesFromSettings()
+        shot("\(prefix)-常用分類-支出")
+        app.buttons["edit_飲食"].tap()
+        XCTAssertTrue(app.textFields["categoryName"].waitForExistence(timeout: 30))
+        shot("\(prefix)-編輯分類")
+        app.navigationBars.buttons.firstMatch.tap()
+        XCTAssertTrue(app.buttons["edit_飲食"].waitForExistence(timeout: 10))
+        app.segmentedControls.buttons["收入"].firstMatch.tap()
+        XCTAssertTrue(app.buttons["edit_薪水"].waitForExistence(timeout: 10))
+        shot("\(prefix)-常用分類-收入")
+    }
+
+    func testCategoriesInLight() {
+        launch()
+        shootCategories("33-淺色")
+    }
+
+    func testCategoriesInDark() {
+        launch(extra: ["-forceDark"])
+        shootCategories("34-深色")
+    }
+
+    func testCategoriesInLargeText() {
+        launch(extra: ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityL"])
+        shootCategories("35-大字")
     }
 
     // MARK: - 深色、大字

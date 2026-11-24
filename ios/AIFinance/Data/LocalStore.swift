@@ -27,7 +27,22 @@ final class StoredBudget {
     }
 }
 
+/// 分類的設定整份存一列：改過的名字、自己新增的、顯示哪些、順序。
+@Model
+final class StoredCategoryBook {
+    @Attribute(.unique) var id: UUID
+    var payload: Data
+
+    init(id: UUID, payload: Data) {
+        self.id = id
+        self.payload = payload
+    }
+}
+
 final class LocalStore {
+    private static let bookID = UUID(uuid: (0xBA, 0x1C, 0xA1, 0, 0, 0, 0x40, 0, 0x80, 0, 0, 0, 0, 0, 0, 0))
+
+
     private let container: ModelContainer
     private let context: ModelContext
     private let encoder = JSONEncoder()
@@ -35,7 +50,7 @@ final class LocalStore {
 
     init(inMemory: Bool) throws {
         let config = ModelConfiguration("Baicai", isStoredInMemoryOnly: inMemory)
-        container = try ModelContainer(for: StoredTxn.self, StoredBudget.self, configurations: config)
+        container = try ModelContainer(for: StoredTxn.self, StoredBudget.self, StoredCategoryBook.self, configurations: config)
         context = ModelContext(container)
         context.autosaveEnabled = false
     }
@@ -46,6 +61,22 @@ final class LocalStore {
 
     func budgets() throws -> [Budget] {
         try context.fetch(FetchDescriptor<StoredBudget>()).map { try decoder.decode(Budget.self, from: $0.payload) }
+    }
+
+    /// 沒存過就是預設的樣子。
+    func categoryBook() throws -> CategoryBook {
+        guard let row = try context.fetch(FetchDescriptor<StoredCategoryBook>()).first else { return CategoryBook() }
+        return try decoder.decode(CategoryBook.self, from: row.payload).cleaned()
+    }
+
+    func save(_ book: CategoryBook) throws {
+        let payload = try encoder.encode(book)
+        if let row = try context.fetch(FetchDescriptor<StoredCategoryBook>()).first {
+            row.payload = payload
+        } else {
+            context.insert(StoredCategoryBook(id: Self.bookID, payload: payload))
+        }
+        try commit()
     }
 
     func save(_ items: [Txn]) throws {
@@ -67,6 +98,7 @@ final class LocalStore {
         do {
             try context.fetch(FetchDescriptor<StoredTxn>()).forEach { context.delete($0) }
             try context.fetch(FetchDescriptor<StoredBudget>()).forEach { context.delete($0) }
+            try context.fetch(FetchDescriptor<StoredCategoryBook>()).forEach { context.delete($0) }
         } catch {
             context.rollback()
             throw error

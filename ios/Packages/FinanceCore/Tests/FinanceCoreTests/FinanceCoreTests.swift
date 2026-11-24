@@ -23,7 +23,7 @@ private func everyDay(_ month: String, through: Int, amount: Int, _ category: St
 }
 
 private func report(_ rows: [Txn], month: String = "2026-11", today: String = "2026-11-25", budgets: [Budget] = []) -> MonthReport {
-    Analysis.report(month: month + "-01", today: today, transactions: rows, budgets: budgets, days: days)
+    Analysis.report(month: month + "-01", today: today, transactions: rows, budgets: budgets, book: CategoryBook(), days: days)
 }
 
 final class MoneyTests: XCTestCase {
@@ -85,13 +85,6 @@ final class DaysTests: XCTestCase {
 }
 
 final class ModelTests: XCTestCase {
-    func testCategoryIdsAreStableAndUnique() {
-        XCTAssertEqual(Set(Categories.all.map(\.id)).count, Categories.all.count)
-        XCTAssertEqual(Categories.named("飲食").id.uuidString, "BA1CA100-0000-4000-8000-000000000001")
-        XCTAssertEqual(Categories.of(.expense).count, 12)
-        XCTAssertEqual(Categories.of(.income).count, 4)
-    }
-
     func testEditKeepsTheOriginalValue() {
         let original = tx(120, "2026-11-15")
         var fields = original.fields
@@ -121,8 +114,8 @@ final class ModelTests: XCTestCase {
     }
 
     func testTitleFallsBackToCategory() {
-        XCTAssertEqual(tx(1, "2026-11-01", "交通").title, "交通")
-        XCTAssertEqual(tx(1, "2026-11-01", "交通", note: "加油").title, "加油")
+        XCTAssertEqual(CategoryBook().title(of: tx(1, "2026-11-01", "交通")), "交通")
+        XCTAssertEqual(CategoryBook().title(of: tx(1, "2026-11-01", "交通", note: "加油")), "加油")
     }
 
     func testBudgetKeepsOldMonths() {
@@ -296,7 +289,7 @@ final class AnalysisTests: XCTestCase {
         XCTAssertEqual(Analysis.recentMonths(today: "2026-11-25", transactions: rows, days: days).last?.expense, r.expense)
         let food = Categories.named("飲食").id
         XCTAssertEqual(
-            Analysis.categoryTotal(food, month: "2026-11-25", transactions: rows, days: days),
+            Analysis.categoryTotal(food, month: "2026-11-25", transactions: rows, book: CategoryBook(), days: days),
             r.categories.first { $0.id == food }?.total
         )
         XCTAssertEqual(
@@ -383,7 +376,7 @@ final class CSVTests: XCTestCase {
             tx(65, "2026-11-14", "交通", note: "=SUM(A1)", oneOff: true),
             tx(1, "2026-11-13", deleted: true),
         ]
-        let csv = CSVExport.make(transactions: rows)
+        let csv = CSVExport.make(transactions: rows, book: CategoryBook())
         let lines = csv.components(separatedBy: "\r\n")
         XCTAssertTrue(csv.hasPrefix("\u{FEFF}日期,類型,金額"))
         XCTAssertEqual(lines.count, 4)

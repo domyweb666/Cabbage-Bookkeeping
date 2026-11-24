@@ -15,7 +15,7 @@ jobs:
   ios:
     name: iOS（FinanceCore 測試、建置、畫面測試）
     runs-on: macos-26
-    timeout-minutes: 45
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
 
@@ -29,6 +29,24 @@ jobs:
 
       - name: FinanceCore 單元測試
         run: swift test --package-path ios/Packages/FinanceCore
+
+      # 規則還沒在這裡跑過，先當參考不擋。看過一輪沒問題就拿掉 continue-on-error。
+      - name: SwiftLint（參考，不擋）
+        continue-on-error: true
+        run: |
+          command -v swiftlint >/dev/null 2>&1 || brew install swiftlint
+          cd ios
+          swiftlint version
+          # 故意寫一個壞檔，規則沒擋到就報錯。
+          mkdir -p AIFinance/Features/LintProbe
+          printf 'import SwiftUI
+let bad = Text("x").padding(.top, 8).font(.system(size: 17))
+' > AIFinance/Features/LintProbe/Bad.swift
+          if swiftlint lint --strict --config .swiftlint.yml AIFinance/Features/LintProbe; then
+            echo "::warning::壞檔沒有被擋下來"
+          fi
+          rm -rf AIFinance/Features/LintProbe
+          swiftlint lint --strict --config .swiftlint.yml
 
       - name: 產生 Xcode 專案
         run: |
