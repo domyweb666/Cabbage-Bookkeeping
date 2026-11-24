@@ -16,7 +16,7 @@
 ## 🚧 還沒做完 / 待決定
 
 - 53b2627 的 CI 還沒看結果，改過的 5 個地方還沒看截圖
-- 多米要決定：`supabase/` 和 `eval/` 要不要刪（App 沒用到，AI 版最後 commit 是 49444cc）
+- `supabase/` 和 `eval/`：多米 2026-11-25 說先留著，不要刪、不要再問
 - 多米要確認 `.analytics/` 的閘門 0、1、2（資料結構最好在上 TestFlight 前確認）；閘門 3、4 要真人
 - 還沒做：TestFlight 上傳（secrets 沒給）、真機驗收、接 VeggieKit 與 domy-design、PR #1 併 main
 
