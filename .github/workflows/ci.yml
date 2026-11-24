@@ -39,9 +39,10 @@ jobs:
           swiftlint version
           # 故意寫一個壞檔，規則沒擋到就報錯。
           mkdir -p AIFinance/Features/LintProbe
-          printf 'import SwiftUI
-let bad = Text("x").padding(.top, 8).font(.system(size: 17))
-' > AIFinance/Features/LintProbe/Bad.swift
+          {
+            echo 'import SwiftUI'
+            echo 'let bad = Text("x").padding(.top, 8).font(.system(size: 17))'
+          } > AIFinance/Features/LintProbe/Bad.swift
           if swiftlint lint --strict --config .swiftlint.yml AIFinance/Features/LintProbe; then
             echo "::warning::壞檔沒有被擋下來"
           fi
