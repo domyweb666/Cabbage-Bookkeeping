@@ -49,9 +49,10 @@
 
 - [x] E：畫布已同步四個小修
 
-- [ ] F：UI 照 E:\多米ios開發準則 對照並改（多米 2026-11-25 要的）｜.uiux/準則對照.md 寫好、CI 綠、截圖看過｜ios/、.uiux/｜A 之後 push。已派子代理，改完由主對話 commit、push
+- [ ] F：UI 照準則改，程式寫完已推，等 CI（沒編譯過；沒把握處：CategoryPickerView 編輯模式常開、contentMargins、DomyPage、ContentUnavailableView）。對照表 .uiux/準則對照.md。待多米決定：slug baicai 與介紹、信箱、隱私權網址、Apple ID、刪一筆要不要先問、核心動作卡｜CI 綠、截圖看過｜ios/｜無
 - [ ] H：分類與圖示加多（支出約 50、收入約 17，舊編號不變）、「常用分類」畫面可勾選、拖曳排序、自己取名（新增自訂、改內建名字圖示），存 SwiftData；分類查找改走 CategoryBook；找不到分類的紀錄不能漏算（多米 2026-11-25 分三則講的）｜CI 綠、截圖看過｜跟 F 同一個子代理在改｜F
 - [ ] I：.analytics/02-04、05 補自訂分類（紀錄規格、邊界情況、改版紀錄）｜文件跟程式一致｜.analytics/｜H
+- [ ] J：README、DECISIONS、TESTFLIGHT_CHECKLIST 補設定頁新列、常用分類、準則對照｜跟程式一致｜README.md、docs/｜F、H
 - [ ] G：F 的 CI 綠了之後，畫布照新畫面更新｜同一個連結｜無｜依賴 F、E
 
 ## 🗑️ 雜訊（下次別重新討論）
