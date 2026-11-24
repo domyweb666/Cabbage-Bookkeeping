@@ -245,9 +245,6 @@ struct AnalysisView: View {
                 VStack(alignment: .leading, spacing: Theme.Gap.tight) {
                     HStack {
                         Text(Days.shortMonth(of: item.month)).foregroundStyle(Theme.primaryText)
-                        if item.isCurrent {
-                            Text(AnalysisText.recentCurrent).foregroundStyle(Theme.secondaryText)
-                        }
                         Spacer()
                         Text(item.expense.map(Money.format) ?? AnalysisText.recentMissing)
                             .foregroundStyle(item.expense == nil ? Theme.secondaryText : Theme.primaryText)
@@ -258,6 +255,7 @@ struct AnalysisView: View {
                         PlainBar(value: expense, scale: scale, isHollow: item.isCurrent)
                             .accessibilityHidden(true)
                     }
+                    if item.isCurrent { small(AnalysisText.recentCurrent) }
                 }
                 .accessibilityElement(children: .combine)
             }

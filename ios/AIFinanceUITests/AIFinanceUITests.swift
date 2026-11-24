@@ -207,7 +207,7 @@ final class AIFinanceUITests: XCTestCase {
         app.textFields["budgetAmount"].typeText("10000")
         shot("18-訂預算")
         app.buttons["budgetSave"].tap()
-        XCTAssertTrue(wait("budgetButton", contains: "預算還剩 NT$2,995，還有 6 天，一天 NT$499。"))
+        XCTAssertTrue(wait("budgetButton", contains: "預算還剩 NT$2,995，每天 NT$499。"))
         app.tabBars.buttons["記帳"].tap()
         XCTAssertTrue(wait("monthTotal", contains: "還能花 NT$2,995"))
     }

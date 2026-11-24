@@ -58,7 +58,7 @@ public enum AnalysisText {
     /// A4 預算那一行。
     public static func budget(_ status: BudgetStatus) -> String {
         if let perDay = status.perDay {
-            return "預算還剩 \(Money.format(status.left))，還有 \(status.daysLeft) 天，一天 \(Money.format(perDay))。"
+            return "預算還剩 \(Money.format(status.left))，每天 \(Money.format(perDay))。"
         }
         if status.left < 0 {
             return "預算 \(Money.format(status.budget))，多花了 \(Money.format(-status.left))。"

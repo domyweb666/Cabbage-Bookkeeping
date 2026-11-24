@@ -293,9 +293,9 @@ private struct Keypad: View {
                 Button(action: onSave) {
                     Text("記下")
                         .font(.headline)
-                        .foregroundStyle(Theme.onAccent)
+                        .foregroundStyle(canSave ? Theme.onAccent : Theme.secondaryText)
                         .frame(maxWidth: .infinity, minHeight: Self.tallHeight)
-                        .background(Theme.accent.opacity(canSave ? 1 : 0.35))
+                        .background(canSave ? Theme.accent : Theme.disabled)
                         .clipShape(RoundedRectangle(cornerRadius: Theme.keyRadius, style: .continuous))
                 }
                 .disabled(!canSave)

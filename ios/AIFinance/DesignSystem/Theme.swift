@@ -22,10 +22,12 @@ enum Theme {
     static let background = Color(light: 0xF5F5F7, dark: 0x000000)
     static let card = Color(light: 0xFFFFFF, dark: 0x1C1C1E)
     static let primaryText = Color(light: 0x1D1D1F, dark: 0xF5F5F7)
-    static let secondaryText = Color(light: 0x86868B, dark: 0x98989D)
+    static let secondaryText = Color(light: 0x6A6A6F, dark: 0xA1A1A6)
     static let accent = Color(light: 0x8B5A71, dark: 0xC792AB)
     /// 放在主色上面的字。
     static let onAccent = Color(light: 0xFFFFFF, dark: 0x1C1C1E)
+    /// 還不能按的主要按鈕底色，字用 secondaryText。
+    static let disabled = Color(light: 0xE5E5EA, dark: 0x2C2C2E)
     static let income = Color(light: 0x329B79, dark: 0x4CC29B)
     /// 圖上「平常範圍」那一段。
     static let band = Color(light: 0xA9A9B0, dark: 0x7C7C82)
@@ -89,9 +91,9 @@ struct PrimaryButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.headline)
-            .foregroundStyle(Theme.onAccent)
+            .foregroundStyle(isEnabled ? Theme.onAccent : Theme.secondaryText)
             .frame(maxWidth: .infinity, minHeight: 52)
-            .background(Theme.accent.opacity(isEnabled ? (configuration.isPressed ? 0.8 : 1) : 0.35))
+            .background(isEnabled ? Theme.accent.opacity(configuration.isPressed ? 0.8 : 1) : Theme.disabled)
             .clipShape(Capsule())
     }
 }

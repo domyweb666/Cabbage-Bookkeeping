@@ -255,7 +255,7 @@ final class AnalysisTests: XCTestCase {
         XCTAssertEqual(r.budget?.left, 4200)
         XCTAssertEqual(r.budget?.daysLeft, 6, "25 號到 30 號，今天也算")
         XCTAssertEqual(r.budget?.perDay, 700)
-        XCTAssertEqual(AnalysisText.budget(r.budget!), "預算還剩 NT$4,200，還有 6 天，一天 NT$700。")
+        XCTAssertEqual(AnalysisText.budget(r.budget!), "預算還剩 NT$4,200，每天 NT$700。")
         XCTAssertEqual(AnalysisText.homeBudget(r.budget!), "還能花 NT$4,200")
 
         let over = report([tx(21000, "2026-11-01")], budgets: [budget])
