@@ -68,3 +68,4 @@
 - 45467980182（12f774b）全綠，21 個畫面測試。「一次性，不跟平常比」按鈕、閃捲軸、大字「最大的三筆」三樣沒有截圖，真機要看。
 - 2026-11-25 PR #1 已併進 main（b4d9f74），內容跟 build-mvp 一樣。沒設 secret，TestFlight 會自己略過。上架指南寫好了 docs/上架指南.md（26 步，分支 appstore-prep，最後 12 項等多米給）。之後的修改從 main 另開分支。
 - 上架前要改：app 內加隱私權政策連結、testflight.yml 改手動簽章與手動觸發（等多米點頭）、.gitignore 補 .cer .key。
+- 多米 2026-11-25 定：TestFlight 改手動簽章＋手動觸發。子代理在改 testflight.yml、ios/ci、project.yml、指南（分支 appstore-prep）。改完要推分支開 PR 讓 CI 驗 project.yml，再併 main。
