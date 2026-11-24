@@ -12,11 +12,8 @@ options:
 settings:
   base:
     SWIFT_VERSION: "5.0"
-    MARKETING_VERSION: "0.1.0"
+    MARKETING_VERSION: "0.2.0"
     CURRENT_PROJECT_VERSION: "1"
-    # 建置時由 CI 或本機的 xcodebuild 參數帶入；留空就是示範模式。
-    SUPABASE_HOST: ""
-    SUPABASE_ANON_KEY: ""
 
 packages:
   FinanceCore:
@@ -41,15 +38,6 @@ targets:
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
         ITSAppUsesNonExemptEncryption: false
-        NSMicrophoneUsageDescription: 用語音記帳時，需要透過麥克風聽你說的那一句話。
-        NSSpeechRecognitionUsageDescription: 把你說的話轉成文字，再整理成一筆紀錄。
-        SupabaseHost: $(SUPABASE_HOST)
-        SupabaseAnonKey: $(SUPABASE_ANON_KEY)
-    entitlements:
-      path: AIFinance/Resources/AIFinance.entitlements
-      properties:
-        com.apple.developer.applesignin:
-          - Default
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: org.domyweb.baicai

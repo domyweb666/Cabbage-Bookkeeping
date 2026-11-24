@@ -1,6 +1,6 @@
 import Foundation
 
-/// 時間軸上的一天：交易由舊到新，最新的在最下面（靠近輸入列）。
+/// 明細上的一天。
 public struct DaySection: Identifiable, Hashable, Sendable {
     public let day: String
     public let items: [Txn]
@@ -11,15 +11,13 @@ public struct DaySection: Identifiable, Hashable, Sendable {
 }
 
 public enum Timeline {
-    /// 依日期分組並計算每日小計。已刪除的交易不列入。
+    /// 依日期分組並算每日小計，最新的在最上面。已刪除的不列入。
     public static func sections(from transactions: [Txn]) -> [DaySection] {
         let alive = transactions.filter { $0.deletedAt == nil }
         let grouped = Dictionary(grouping: alive, by: \.occurredOn)
-        return grouped.keys.sorted().map { day in
+        return grouped.keys.sorted(by: >).map { day in
             let items = grouped[day]!.sorted { a, b in
-                let ta = a.createdAt ?? ""
-                let tb = b.createdAt ?? ""
-                return ta == tb ? a.id.uuidString < b.id.uuidString : ta < tb
+                a.createdAt == b.createdAt ? a.id.uuidString > b.id.uuidString : a.createdAt > b.createdAt
             }
             return DaySection(
                 day: day,
@@ -29,21 +27,27 @@ public enum Timeline {
             )
         }
     }
-
-    /// 某個月的支出總額（頂部顯示用；正式數字以後端的 monthly_overview 為準）。
-    public static func monthExpense(from transactions: [Txn], monthOf day: String) -> Int {
-        let prefix = String(day.prefix(7))
-        return transactions
-            .filter { $0.deletedAt == nil && $0.type == .expense && $0.occurredOn.hasPrefix(prefix) }
-            .reduce(0) { $0 + $1.amount }
-    }
 }
 
-/// 尚未綁定且已記超過 20 筆時，提示一次備份，之後不再打擾（規格 8.3）。
-public enum BackupPrompt {
-    public static let threshold = 20
+/// 記帳鍵盤上的金額。只收整數，最多八位。
+public struct AmountPad: Hashable, Sendable {
+    public static let maxDigits = 8
 
-    public static func shouldShow(transactionCount: Int, isLinked: Bool, alreadyShown: Bool) -> Bool {
-        !isLinked && !alreadyShown && transactionCount > threshold
+    public private(set) var value: Int
+
+    public init(value: Int = 0) {
+        self.value = value
+    }
+
+    /// 按數字鍵（"0" 到 "9"、"00"）。超過位數就不理會。
+    public mutating func press(_ key: String) {
+        guard !key.isEmpty, key.allSatisfy({ $0.isASCII && $0.isNumber }) else { return }
+        let text = value == 0 ? key : String(value) + key
+        guard let next = Int(text), String(next).count <= Self.maxDigits else { return }
+        value = next
+    }
+
+    public mutating func backspace() {
+        value /= 10
     }
 }

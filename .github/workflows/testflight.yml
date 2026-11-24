@@ -22,14 +22,12 @@ jobs:
       ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
       ASC_KEY_P8_BASE64: ${{ secrets.ASC_KEY_P8_BASE64 }}
       APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-      SUPABASE_HOST: ${{ secrets.SUPABASE_HOST }}
-      SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
     steps:
       - name: 檢查金鑰是否齊全
         id: check
         run: |
           missing=""
-          for name in ASC_KEY_ID ASC_ISSUER_ID ASC_KEY_P8_BASE64 APPLE_TEAM_ID SUPABASE_HOST SUPABASE_ANON_KEY; do
+          for name in ASC_KEY_ID ASC_ISSUER_ID ASC_KEY_P8_BASE64 APPLE_TEAM_ID; do
             if [ -z "${!name}" ]; then missing="$missing $name"; fi
           done
           if [ -n "$missing" ]; then
@@ -70,8 +68,6 @@ jobs:
             DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
             CODE_SIGN_STYLE=Automatic \
             CURRENT_PROJECT_VERSION="${{ github.run_number }}" \
-            SUPABASE_HOST="$SUPABASE_HOST" \
-            SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY" \
             2>&1 | tee archive.log | grep -E "error:|\*\* " | tail -40
 
       - name: 上傳 TestFlight

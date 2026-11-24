@@ -1,11 +1,14 @@
 import Foundation
 
-/// 日期處理一律明確指定時區。「哪一天」用 yyyy-MM-dd 字串表示，跟後端一致。
+/// 日期處理一律明確指定時區。「哪一天」用 yyyy-MM-dd 字串表示。
 public struct Days: Sendable {
     public let timeZone: TimeZone
     private let calendar: Calendar
 
     public static let taipei = Days(timeZone: TimeZone(identifier: "Asia/Taipei")!)
+
+    /// 手機目前的時區。出國時「今天」跟著當地走。
+    public static var local: Days { Days(timeZone: .current) }
 
     public init(timeZone: TimeZone) {
         self.timeZone = timeZone
@@ -50,6 +53,22 @@ public struct Days: Sendable {
         return monthStart(of: self.day(of: moved))
     }
 
+    /// 這個月有幾天。
+    public func length(ofMonth day: String) -> Int {
+        Days.number(of: adding(days: -1, to: adding(months: 1, toMonthOf: day)))
+    }
+
+    /// "2026-11-25" → 25
+    public static func number(of day: String) -> Int {
+        Int(day.suffix(2)) ?? 0
+    }
+
+    /// "2026-11-25" → "11 月"
+    public static func shortMonth(of day: String) -> String {
+        let parts = day.split(separator: "-").compactMap { Int($0) }
+        return parts.count >= 2 ? "\(parts[1]) 月" : day
+    }
+
     /// "2026-11-15" → "2026 年 11 月"
     public func monthTitle(of day: String) -> String {
         let parts = day.split(separator: "-").compactMap { Int($0) }
@@ -57,7 +76,7 @@ public struct Days: Sendable {
         return "\(parts[0]) 年 \(parts[1]) 月"
     }
 
-    /// 時間軸的日期標題：今天、昨天、11 月 13 日 週五；跨年才帶年份。
+    /// 明細的日期標題：今天、昨天、11 月 13 日 週五；跨年才帶年份。
     public func sectionTitle(for day: String, today: String) -> String {
         if day == today { return "今天" }
         if day == adding(days: -1, to: today) { return "昨天" }
@@ -66,13 +85,5 @@ public struct Days: Sendable {
         let weekdays = ["日", "一", "二", "三", "四", "五", "六"]
         let base = "\(p.month!) 月 \(p.day!) 日 週\(weekdays[(p.weekday! - 1) % 7])"
         return day.prefix(4) == today.prefix(4) ? base : "\(p.year!) 年 \(base)"
-    }
-
-    /// 傳給後端的時間字串（ISO 8601，帶時區偏移）。
-    public func iso8601(_ date: Date) -> String {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime]
-        f.timeZone = timeZone
-        return f.string(from: date)
     }
 }

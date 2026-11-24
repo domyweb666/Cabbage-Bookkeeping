@@ -1,6 +1,6 @@
 import XCTest
 
-/// 畫面測試：用示範後端（-demoBackend）把主要流程實際點過一遍，每一步截圖。
+/// 畫面測試：資料放記憶體，把主要流程實際點過一遍，每一步截圖。
 /// 開發機沒有 Mac，這是每次推送後確認畫面真的跑得起來的方法。
 final class AIFinanceUITests: XCTestCase {
     private var app: XCUIApplication!
@@ -8,16 +8,17 @@ final class AIFinanceUITests: XCTestCase {
     override func setUp() {
         continueAfterFailure = false
         app = XCUIApplication()
-        // -skipCoach：聚光燈引導會蓋住畫面，只有專門測引導的那個測試才打開。
-        // -stillMascot：小白菜靜止，測試才不用一直等動畫停下來。
+        // 固定今天是 11 月 25 日，分析頁的數字每次都一樣。
         app.launchArguments = [
-            "-demoBackend", "-slowToast", "-skipCoach", "-stillMascot",
+            "-memoryStore", "-slowToast", "-today", "2026-11-25",
             "-AppleLanguages", "(zh-Hant)", "-AppleLocale", "zh_TW",
         ]
     }
 
-    private func launch(seeded: Bool = false) {
-        if seeded { app.launchArguments.append("-demoSeed") }
+    private func launch(demo: String? = nil, today: String? = nil, extra: [String] = []) {
+        if let demo { app.launchArguments += ["-demo", demo] }
+        if let today, let i = app.launchArguments.firstIndex(of: "-today") { app.launchArguments[i + 1] = today }
+        app.launchArguments += extra
         app.launch()
     }
 
@@ -28,241 +29,254 @@ final class AIFinanceUITests: XCTestCase {
         add(attachment)
     }
 
-    private var input: XCUIElement { app.textFields["inputField"].firstMatch.exists ? app.textFields["inputField"] : app.textViews["inputField"] }
-
-    private func type(_ text: String) {
-        XCTAssertTrue(input.waitForExistence(timeout: 30))
-        input.tap()
-        input.typeText(text)
-    }
-
-    private func send() {
-        app.buttons["sendButton"].tap()
-    }
-
     private func text(containing fragment: String) -> XCUIElement {
         app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", fragment)).firstMatch
     }
 
-    /// 時間軸上的一列（整列是一個按鈕，標籤含品項、分類、金額）。
+    /// 明細上的一列（整列是一個按鈕，標籤含標題、分類、金額）。
     private func row(_ fragments: String...) -> XCUIElement {
         let format = fragments.map { _ in "label CONTAINS %@" }.joined(separator: " AND ")
         return app.buttons.containing(NSPredicate(format: format, argumentArray: fragments)).firstMatch
     }
 
-    /// 頂部的本月支出是否等於指定金額。
-    private func waitForMonthTotal(_ amount: String, timeout: TimeInterval = 30) -> Bool {
-        let predicate = NSPredicate(format: "label CONTAINS %@", "本月支出 \(amount)，")
-        let expectation = XCTNSPredicateExpectation(predicate: predicate, object: app.buttons["monthTotal"])
+    private func any(_ id: String) -> XCUIElement {
+        app.descendants(matching: .any)[id].firstMatch
+    }
+
+    private func wait(_ id: String, contains fragment: String, timeout: TimeInterval = 30) -> Bool {
+        let predicate = NSPredicate(format: "label CONTAINS %@", fragment)
+        let expectation = XCTNSPredicateExpectation(predicate: predicate, object: any(id))
         return XCTWaiter.wait(for: [expectation], timeout: timeout) == .completed
     }
 
-    // MARK: - 首次開啟到第一筆入帳
+    private func openEntry() {
+        XCTAssertTrue(app.buttons["addButton"].waitForExistence(timeout: 30))
+        app.buttons["addButton"].tap()
+        XCTAssertTrue(app.buttons["entrySave"].waitForExistence(timeout: 30))
+    }
 
-    func testFirstLaunchRecordsFirstEntry() {
+    private func press(_ keys: String...) {
+        for key in keys { app.buttons["key_\(key)"].tap() }
+    }
+
+    private func openAnalysis() {
+        app.tabBars.buttons["分析"].tap()
+        XCTAssertTrue(any("analysisTotal").waitForExistence(timeout: 30))
+    }
+
+    /// 往下捲到看得到、按得到為止。
+    private func scrollTo(_ element: XCUIElement) {
+        for _ in 0..<6 where !(element.exists && element.isHittable) { app.swipeUp(velocity: .slow) }
+        XCTAssertTrue(element.exists, "捲到底還是找不到")
+    }
+
+    // MARK: - 記帳
+
+    func testFirstEntryAndUndo() {
         launch()
-        XCTAssertTrue(app.staticTexts["講一句就記好了"].waitForExistence(timeout: 30))
-        XCTAssertTrue(app.buttons["麥當勞 188"].exists)
+        XCTAssertTrue(app.staticTexts["還沒有紀錄"].waitForExistence(timeout: 30))
         shot("01-首次開啟")
 
-        // 點範例句會填進輸入列。
-        app.buttons["麥當勞 188"].tap()
-        XCTAssertEqual(input.value as? String, "麥當勞 188")
-        send()
+        openEntry()
+        XCTAssertFalse(app.buttons["entrySave"].isEnabled, "還沒填金額和分類不能記")
+        shot("02-記一筆-空白")
 
-        XCTAssertTrue(app.staticTexts["已記錄 NT$188"].waitForExistence(timeout: 30))
-        XCTAssertTrue(row("麥當勞", "NT$188").waitForExistence(timeout: 5))
-        XCTAssertTrue(waitForMonthTotal("NT$188"), "頂部本月支出應該更新")
-        shot("02-第一筆入帳")
-    }
+        press("1", "8", "8")
+        XCTAssertFalse(app.buttons["entrySave"].isEnabled, "還沒選分類不能記")
+        app.buttons["category_飲食"].tap()
+        XCTAssertTrue(app.buttons["entrySave"].isEnabled)
+        shot("03-記一筆-填好")
+        app.buttons["entrySave"].tap()
 
-    // MARK: - 連續記多筆、復原
-
-    func testMultipleEntriesAndUndo() {
-        launch()
-        type("早餐 65，午餐便當 120")
-        send()
-        XCTAssertTrue(app.staticTexts["已記錄 2 筆，共 NT$185"].waitForExistence(timeout: 30))
-
-        type("昨天加油 500")
-        send()
-        XCTAssertTrue(app.staticTexts["已記錄 NT$500"].waitForExistence(timeout: 30))
-        XCTAssertTrue(waitForMonthTotal("NT$685"))
-        // 新的一筆進來時清單會捲動，等它停下來再找標題。
-        XCTAssertTrue(app.staticTexts["昨天"].waitForExistence(timeout: 30))
-        XCTAssertTrue(row("加油", "NT$500").waitForExistence(timeout: 5))
-        shot("03-連續記帳")
+        XCTAssertTrue(wait("toastText", contains: "記好了。飲食這個月共 NT$188"))
+        XCTAssertTrue(row("飲食", "NT$188").waitForExistence(timeout: 10))
+        XCTAssertTrue(wait("monthTotal", contains: "NT$188"))
+        shot("04-記好第一筆")
 
         app.buttons["undoButton"].tap()
-        XCTAssertTrue(waitForMonthTotal("NT$185"), "復原後本月支出回到 185")
-        XCTAssertFalse(row("加油").exists)
-        shot("04-復原之後")
+        XCTAssertTrue(app.staticTexts["還沒有紀錄"].waitForExistence(timeout: 30))
     }
 
-    // MARK: - 確認卡
-
-    func testLargeAmountNeedsConfirmation() {
+    func testIncomeAndNote() {
         launch()
-        type("買電腦 45000")
-        send()
+        openEntry()
+        app.buttons["收入"].tap()
+        XCTAssertTrue(app.buttons["category_薪水"].waitForExistence(timeout: 10))
+        press("4", "2", "00", "0")
+        app.buttons["category_薪水"].tap()
+        shot("05-記收入")
+        app.buttons["entrySave"].tap()
+        XCTAssertTrue(wait("toastText", contains: "記好了。薪水 NT$42,000"))
+        XCTAssertTrue(wait("monthTotal", contains: "NT$0"), "收入不算進本月支出")
 
-        XCTAssertTrue(app.buttons["confirmAll"].waitForExistence(timeout: 30))
-        XCTAssertTrue(text(containing: "金額超過 10,000").exists)
-        shot("05-確認卡")
-
-        app.buttons["confirmAll"].tap()
-        XCTAssertTrue(app.staticTexts["已記錄 NT$45,000"].waitForExistence(timeout: 30))
-        XCTAssertTrue(waitForMonthTotal("NT$45,000"))
-        shot("06-確認後入帳")
+        openEntry()
+        press("5", "00")
+        app.buttons["key_back"].tap()
+        app.buttons["category_交通"].tap()
+        let note = app.textFields["entryNote"]
+        note.tap()
+        note.typeText("加油")
+        shot("06-打備註")
+        app.buttons["完成"].firstMatch.tap()
+        XCTAssertTrue(app.buttons["entrySave"].waitForExistence(timeout: 10))
+        app.buttons["entrySave"].tap()
+        XCTAssertTrue(row("加油", "交通", "NT$50").waitForExistence(timeout: 10))
     }
 
-    func testCancelledConfirmationRecordsNothing() {
-        launch()
-        type("薪水 52000")
-        send()
-        XCTAssertTrue(app.buttons["confirmCancel"].waitForExistence(timeout: 30))
-        XCTAssertTrue(text(containing: "收入需要確認").exists)
-        app.buttons["confirmCancel"].tap()
-        XCTAssertTrue(app.staticTexts["講一句就記好了"].waitForExistence(timeout: 30), "取消後什麼都沒記")
-        XCTAssertTrue(waitForMonthTotal("NT$0"))
-    }
-
-    // MARK: - 看不懂、提問
-
-    func testUnclearInputKeepsTextAndShowsHint() {
-        launch()
-        type("午餐花了一些錢")
-        send()
-        XCTAssertTrue(text(containing: "要記多少錢").waitForExistence(timeout: 30))
-        XCTAssertEqual(input.value as? String, "午餐花了一些錢", "原話要留在輸入列")
-        shot("07-看不懂的提示")
-    }
-
-    func testQuestionShowsAnswerWithEvidence() {
-        launch(seeded: true)
-        XCTAssertTrue(row("機車維修").waitForExistence(timeout: 30))
-        shot("08-有資料的時間軸")
-
-        type("這個月花多少？")
-        send()
-        XCTAssertTrue(text(containing: "這個月到目前支出共 NT$7,005，一共 6 筆").waitForExistence(timeout: 30))
-        shot("09-回答卡")
-
-        app.buttons["evidenceButton"].firstMatch.tap()
-        XCTAssertTrue(app.navigationBars["依據"].waitForExistence(timeout: 30))
-        shot("10-依據清單")
-    }
-
-    // MARK: - 編輯、概覽、設定
-
-    func testEditTransaction() {
-        launch(seeded: true)
+    func testEditAndDelete() {
+        launch(demo: "fresh")
         XCTAssertTrue(row("便當", "NT$120").waitForExistence(timeout: 30))
+        shot("07-明細")
         row("便當", "NT$120").tap()
-
-        let amount = app.textFields["editorAmount"]
-        XCTAssertTrue(amount.waitForExistence(timeout: 30))
-        shot("11-編輯畫面")
-        // 金額靠右對齊，點最右邊讓游標停在數字後面。
-        amount.coordinate(withNormalizedOffset: CGVector(dx: 0.97, dy: 0.5)).tap()
-        amount.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 3) + "150")
-        app.buttons["editorSave"].tap()
-
+        XCTAssertTrue(app.buttons["entryDelete"].waitForExistence(timeout: 30))
+        shot("08-修改")
+        press("back", "back", "back")
+        press("1", "5", "0")
+        app.buttons["entrySave"].tap()
         XCTAssertTrue(row("便當", "NT$150").waitForExistence(timeout: 30))
-        XCTAssertTrue(waitForMonthTotal("NT$7,035"))
+        XCTAssertTrue(wait("monthTotal", contains: "NT$7,035"))
+
+        row("便當", "NT$150").tap()
+        XCTAssertTrue(app.buttons["entryDelete"].waitForExistence(timeout: 30))
+        app.buttons["entryDelete"].tap()
+        let confirm = app.buttons.matching(NSPredicate(format: "label == %@ AND identifier != %@", "刪除", "entryDelete")).firstMatch
+        XCTAssertTrue(confirm.waitForExistence(timeout: 10))
+        confirm.tap()
+        XCTAssertTrue(wait("toastText", contains: "已刪除「便當」"))
+        XCTAssertTrue(wait("monthTotal", contains: "NT$6,885"))
+        app.buttons["undoButton"].tap()
+        XCTAssertTrue(wait("monthTotal", contains: "NT$7,035"), "復原後要回來")
     }
 
-    func testOverviewAndSettings() {
-        launch(seeded: true)
-        XCTAssertTrue(app.buttons["monthTotal"].waitForExistence(timeout: 30))
-        app.buttons["monthTotal"].tap()
-        XCTAssertTrue(app.staticTexts["扣掉一次性支出後的日常開銷"].waitForExistence(timeout: 30))
-        XCTAssertTrue(app.staticTexts["支出分類"].exists)
-        shot("12-本月概覽")
-        app.buttons["完成"].tap()
+    // MARK: - 分析
 
-        app.buttons["settingsButton"].tap()
-        XCTAssertTrue(app.switches["autoCommitToggle"].waitForExistence(timeout: 30))
-        shot("13-設定")
+    func testAnalysisWithoutEnoughData() {
+        launch(demo: "fresh")
+        openAnalysis()
+        XCTAssertTrue(wait("comparisonText", contains: "再有 2 個記完整的月份"))
+        XCTAssertFalse(any("observationLink").exists)
+        shot("09-分析-資料不夠")
+    }
+
+    func testAnalysisWithObservation() {
+        launch(demo: "steady")
+        XCTAssertTrue(wait("monthTotal", contains: "NT$"))
+        shot("10-明細-有預算")
+        openAnalysis()
+        XCTAssertTrue(wait("comparisonText", contains: "平常到 25 號是"))
+        shot("11-分析-上半")
+
+        scrollTo(any("observationLink"))
+        XCTAssertTrue(wait("categoryAnswer", contains: "飲食到 25 號 NT$6,670"))
+        shot("12-分析-分類")
+        any("observationLink").tap()
+        XCTAssertTrue(wait("categoryDetailHeader", contains: "37 筆，共 NT$6,670"))
+        shot("13-分類明細")
+        app.navigationBars.buttons.firstMatch.tap()
+
+        scrollTo(any("biggestAnswer"))
         app.swipeUp()
-        XCTAssertTrue(app.buttons["隱私說明"].waitForExistence(timeout: 5))
-        app.buttons["隱私說明"].tap()
-        XCTAssertTrue(app.staticTexts["會傳給 AI 服務的內容"].waitForExistence(timeout: 30))
-        shot("14-隱私說明")
+        shot("14-分析-下半")
     }
 
-    // MARK: - 聚光燈引導
-
-    /// 說明卡的文字（步數、標題、內文合成一個元素）。
-    private var coachCard: XCUIElement { app.descendants(matching: .any)["coachCardText"] }
-
-    private func waitForCoachStep(_ title: String, timeout: TimeInterval = 40) -> Bool {
-        let predicate = NSPredicate(format: "label CONTAINS %@", title)
-        let expectation = XCTNSPredicateExpectation(predicate: predicate, object: coachCard)
-        return XCTWaiter.wait(for: [expectation], timeout: timeout) == .completed
+    func testAnalysisAfterAGap() {
+        launch(demo: "returning")
+        openAnalysis()
+        XCTAssertTrue(wait("comparisonText", contains: "中間有 13 天沒有紀錄，先不跟平常比。"))
+        XCTAssertFalse(any("observationLink").exists)
+        shot("15-分析-中間有空窗")
     }
 
-    /// 等打字機把內文打完再按，按一下就會前進（打字中按只會先顯示全文）。
-    private func tapCoachNext() {
-        Thread.sleep(forTimeInterval: 5)
-        app.buttons["coachNext"].tap()
+    func testRecapAtTheStartOfTheMonth() {
+        launch(demo: "steady", today: "2026-11-03")
+        openAnalysis()
+        XCTAssertTrue(any("recapCard").waitForExistence(timeout: 30))
+        shot("16-分析-月初回顧")
+        any("recapCard").tap()
+        XCTAssertTrue(app.staticTexts["2026 年 10 月"].waitForExistence(timeout: 10))
+        XCTAssertTrue(wait("comparisonText", contains: "平常一個月是"))
+        shot("17-分析-上個月")
     }
 
-    func testCoachTourAfterFirstEntryAndReplay() {
-        // 引導要等「已記錄」提示條消失才開始，所以這裡不拉長提示條。
-        app.launchArguments.removeAll { $0 == "-slowToast" || $0 == "-skipCoach" }
-        app.launchArguments.append("-forceCoach")
+    func testBudget() {
+        launch(demo: "fresh")
+        openAnalysis()
+        any("budgetButton").tap()
+        XCTAssertTrue(any("budgetHint").waitForExistence(timeout: 30))
+        app.textFields["budgetAmount"].tap()
+        app.textFields["budgetAmount"].typeText("10000")
+        shot("18-訂預算")
+        app.buttons["budgetSave"].tap()
+        XCTAssertTrue(wait("budgetButton", contains: "預算還剩 NT$2,995，6 天，一天 NT$499。"))
+        app.tabBars.buttons["記帳"].tap()
+        XCTAssertTrue(wait("monthTotal", contains: "還能花 NT$2,995"))
+    }
+
+    // MARK: - 設定
+
+    func testSettingsAndDeleteAll() {
+        launch(demo: "fresh")
+        XCTAssertTrue(app.buttons["addButton"].waitForExistence(timeout: 30))
+        app.tabBars.buttons["設定"].tap()
+        XCTAssertTrue(app.buttons["deleteAllButton"].waitForExistence(timeout: 30))
+        shot("19-設定")
+        app.buttons["隱私說明"].firstMatch.tap()
+        XCTAssertTrue(text(containing: "都存在這支手機上").waitForExistence(timeout: 30))
+        shot("20-隱私說明")
+        app.navigationBars.buttons.firstMatch.tap()
+
+        app.buttons["deleteAllButton"].tap()
+        XCTAssertTrue(app.alerts.buttons["先匯出"].waitForExistence(timeout: 10))
+        app.alerts.buttons["繼續"].tap()
+        XCTAssertTrue(app.alerts.buttons["全部刪除"].waitForExistence(timeout: 10))
+        app.alerts.buttons["全部刪除"].tap()
+        XCTAssertTrue(app.alerts.buttons["好"].waitForExistence(timeout: 10))
+        app.alerts.buttons["好"].tap()
+        app.tabBars.buttons["記帳"].tap()
+        XCTAssertTrue(app.staticTexts["還沒有紀錄"].waitForExistence(timeout: 30))
+    }
+
+    /// 真的存進手機：整個關掉再開，紀錄還在。
+    func testRecordsSurviveRelaunch() {
+        app.launchArguments.removeAll { $0 == "-memoryStore" }
         launch()
+        openEntry()
+        press("7", "7")
+        app.buttons["category_娛樂"].tap()
+        app.buttons["entrySave"].tap()
+        XCTAssertTrue(row("娛樂", "NT$77").waitForExistence(timeout: 30))
 
-        XCTAssertTrue(app.staticTexts["講一句就記好了"].waitForExistence(timeout: 30))
-        XCTAssertFalse(coachCard.exists, "還沒記第一筆之前不該出現教學")
-
-        type("麥當勞 188")
-        send()
-
-        XCTAssertTrue(waitForCoachStep("這筆記好了"), "記完第一筆、提示條消失後引導要出現")
-        XCTAssertTrue(waitForCoachStep("第 1 步，共 3 步", timeout: 5))
-        shot("18-引導-第一步")
-
-        tapCoachNext()
-        XCTAssertTrue(waitForCoachStep("這個月花了多少"))
-        shot("19-引導-第二步")
-
-        tapCoachNext()
-        XCTAssertTrue(waitForCoachStep("想自己填也行"))
-        shot("20-引導-第三步")
-
-        tapCoachNext()
-        XCTAssertTrue(coachCard.waitForNonExistence(timeout: 30), "最後一步按完引導要結束")
-        XCTAssertTrue(row("麥當勞", "NT$188").exists)
-
-        // 設定頁的「重看教學」可以再跑一次，任何一步都能跳過。
-        app.buttons["settingsButton"].tap()
-        XCTAssertTrue(app.switches["autoCommitToggle"].waitForExistence(timeout: 30))
-        app.swipeUp()
-        XCTAssertTrue(app.buttons["replayCoach"].waitForExistence(timeout: 5))
-        app.buttons["replayCoach"].tap()
-        XCTAssertTrue(waitForCoachStep("這筆記好了"), "重看教學要從第一步開始")
-        app.buttons["coachSkip"].tap()
-        XCTAssertTrue(coachCard.waitForNonExistence(timeout: 30), "跳過教學要立即結束")
-        shot("21-引導-結束之後")
+        app.terminate()
+        app.launch()
+        XCTAssertTrue(row("娛樂", "NT$77").waitForExistence(timeout: 30), "重開之後紀錄要還在")
+        XCTAssertTrue(wait("monthTotal", contains: "NT$77"))
     }
 
-    func testDarkModeScreens() {
-        // 模擬器的外觀設定在 CI 上切不動，改由 App 的啟動參數強制深色。
-        app.launchArguments.append("-forceDark")
-        launch(seeded: true)
-        XCTAssertTrue(row("便當").waitForExistence(timeout: 30))
-        shot("15-深色-主畫面")
+    // MARK: - 深色、大字
 
-        type("買電腦 45000")
-        send()
-        XCTAssertTrue(app.buttons["confirmAll"].waitForExistence(timeout: 30))
-        shot("16-深色-確認卡")
-        app.buttons["confirmCancel"].tap()
+    func testDarkMode() {
+        launch(demo: "steady", extra: ["-forceDark"])
+        XCTAssertTrue(app.buttons["addButton"].waitForExistence(timeout: 30))
+        shot("21-深色-明細")
+        openEntry()
+        app.buttons["category_飲食"].tap()
+        shot("22-深色-記一筆")
+        app.buttons["entryCancel"].tap()
+        openAnalysis()
+        shot("23-深色-分析")
+        app.swipeUp()
+        shot("24-深色-分析-下")
+    }
 
-        app.buttons["monthTotal"].tap()
-        XCTAssertTrue(app.staticTexts["支出分類"].waitForExistence(timeout: 30))
-        shot("17-深色-概覽")
+    func testLargeText() {
+        launch(demo: "steady", extra: ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityL"])
+        XCTAssertTrue(app.buttons["addButton"].waitForExistence(timeout: 30))
+        shot("25-大字-明細")
+        openEntry()
+        press("1", "2")
+        shot("26-大字-記一筆")
+        app.buttons["entryCancel"].tap()
+        openAnalysis()
+        shot("27-大字-分析")
     }
 }

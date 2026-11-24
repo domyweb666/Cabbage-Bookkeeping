@@ -3,55 +3,68 @@ import SwiftUI
 
 @main
 struct AIFinanceApp: App {
-    @State private var model: TimelineViewModel
-    @State private var speech = SpeechService()
-    @State private var network = NetworkMonitor()
-    @State private var coach: CoachController
+    @State private var model: LedgerModel?
 
     init() {
         let config = AppConfig.current
-        let backend: Backend
-        if let supabase = config.supabase {
-            backend = SupabaseBackend(baseURL: supabase.url, anonKey: supabase.anonKey)
-        } else {
-            // 沒有設定雲端時用示範後端，App 仍然可以操作。
-            backend = MockBackend(seeded: config.seedDemoData)
+        // 紀錄存在這支手機上，這份資料庫打不開就不能假裝沒事繼續記。
+        guard let store = try? LocalStore(inMemory: config.inMemory) else {
+            _model = State(initialValue: nil)
+            return
         }
-        let store = LocalStore(inMemory: config.supabase == nil)
-        _model = State(initialValue: TimelineViewModel(
-            transactionRepository: TransactionRepository(backend: backend, store: store),
-            entryRepository: EntryRepository(backend: backend, store: store)
-        ))
-        _coach = State(initialValue: CoachController())
+        if let demo = config.demo {
+            let days = Days.local
+            let today = config.today ?? days.day(of: Date())
+            try? store.save(demo.transactions(today: today, days: days))
+            demo.budgets(today: today, days: days).forEach { try? store.save($0) }
+        }
+        _model = State(initialValue: LedgerModel(store: store))
     }
 
     var body: some Scene {
         WindowGroup {
-            RootView()
-                .environment(coach)
-                .environment(model)
-                .environment(speech)
-                .tint(Theme.accent)
-                .preferredColorScheme(AppConfig.current.forceDark ? .dark : nil)
-                .onAppear {
-                    model.connectivityChanged(online: network.isOnline)
-                    network.observe { online in model.connectivityChanged(online: online) }
+            Group {
+                if let model {
+                    RootView().environment(model)
+                } else {
+                    StoreErrorView()
                 }
+            }
+            .tint(Theme.accent)
+            .preferredColorScheme(AppConfig.current.forceDark ? .dark : nil)
         }
     }
 }
 
-/// 主畫面加上聚光燈引導的遮罩。遮罩 0.25 秒淡入淡出。
+/// 三個分頁：記帳、分析、設定。
 private struct RootView: View {
-    @Environment(CoachController.self) private var coach
+    @Environment(LedgerModel.self) private var model
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
-        TimelineView()
-            .overlay {
-                if coach.isActive {
-                    CoachOverlay().transition(.opacity)
-                }
-            }
-            .animation(.easeOut(duration: CoachStyle.fadeSeconds), value: coach.isActive)
+        TabView {
+            LedgerView()
+                .tabItem { Label("記帳", systemImage: "list.bullet") }
+            AnalysisView()
+                .tabItem { Label("分析", systemImage: "chart.bar.fill") }
+            SettingsView()
+                .tabItem { Label("設定", systemImage: "gearshape.fill") }
+        }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { model.refreshToday() }
+        }
+    }
+}
+
+private struct StoreErrorView: View {
+    var body: some View {
+        VStack(spacing: Theme.Gap.item) {
+            Text("打不開紀錄").font(.title3.weight(.semibold))
+            Text("先把 App 整個關掉再開一次。手機空間不夠時也會這樣，清出空間後再試。紀錄還在，沒有被刪掉。")
+                .font(.subheadline)
+                .foregroundStyle(Theme.secondaryText)
+                .multilineTextAlignment(.center)
+        }
+        .padding(Theme.Gap.section)
     }
 }

@@ -1,6 +1,5 @@
 import Foundation
 
-// 與後端共用的資料形狀。JSON 一律用 snake_case，解碼時轉成 camelCase（見 JSONCoding）。
 // 型別名稱刻意避開 Category、Transaction，免得跟 ObjectiveC、SwiftUI 的同名型別打架。
 
 public enum TxType: String, Codable, CaseIterable, Sendable {
@@ -10,267 +9,174 @@ public enum TxType: String, Codable, CaseIterable, Sendable {
     public var label: String { self == .expense ? "支出" : "收入" }
 }
 
-public enum Nature: String, Codable, CaseIterable, Sendable {
-    case routine
-    case oneOff = "one_off"
-    case recurring
-
-    public var label: String {
-        switch self {
-        case .routine: return "日常"
-        case .oneOff: return "一次性"
-        case .recurring: return "固定"
-        }
-    }
-}
-
-public struct TxCategory: Codable, Identifiable, Hashable, Sendable {
+public struct TxCategory: Identifiable, Hashable, Sendable {
     public let id: UUID
     public let name: String
     public let kind: TxType
     public let icon: String
-    public let sortOrder: Int
+}
 
-    public init(id: UUID, name: String, kind: TxType, icon: String, sortOrder: Int) {
-        self.id = id
-        self.name = name
-        self.kind = kind
-        self.icon = icon
-        self.sortOrder = sortOrder
+/// 內建分類。編號固定不變，紀錄靠編號引用，改名不會影響舊紀錄。
+public enum Categories {
+    public static let all: [TxCategory] = [
+        make(1, "飲食", .expense, "fork.knife"),
+        make(2, "交通", .expense, "car.fill"),
+        make(3, "購物", .expense, "bag.fill"),
+        make(4, "日用", .expense, "basket.fill"),
+        make(5, "居住", .expense, "house.fill"),
+        make(6, "娛樂", .expense, "gamecontroller.fill"),
+        make(7, "醫療", .expense, "cross.case.fill"),
+        make(8, "學習", .expense, "book.fill"),
+        make(9, "訂閱", .expense, "repeat"),
+        make(10, "旅行", .expense, "airplane"),
+        make(11, "人情", .expense, "gift.fill"),
+        make(12, "其他", .expense, "ellipsis.circle.fill"),
+        make(21, "薪水", .income, "banknote.fill"),
+        make(22, "獎金", .income, "star.fill"),
+        make(23, "投資", .income, "chart.line.uptrend.xyaxis"),
+        make(24, "其他收入", .income, "ellipsis.circle.fill"),
+    ]
+
+    public static func of(_ kind: TxType) -> [TxCategory] {
+        all.filter { $0.kind == kind }
+    }
+
+    public static func find(_ id: UUID?) -> TxCategory? {
+        guard let id else { return nil }
+        return all.first { $0.id == id }
+    }
+
+    /// 測試與示範資料用：照名字找。
+    public static func named(_ name: String) -> TxCategory {
+        all.first { $0.name == name }!
+    }
+
+    private static func make(_ number: Int, _ name: String, _ kind: TxType, _ icon: String) -> TxCategory {
+        let id = UUID(uuidString: String(format: "BA1CA100-0000-4000-8000-%012d", number))!
+        return TxCategory(id: id, name: name, kind: kind, icon: icon)
     }
 }
 
-/// 一筆交易。金額是正整數（新台幣元），日期是使用者時區的 yyyy-MM-dd。
-public struct Txn: Codable, Identifiable, Hashable, Sendable {
-    public let id: UUID
-    public var entryId: UUID?
-    public var type: TxType
-    public var amount: Int
-    public var occurredOn: String
-    public var item: String
-    public var merchant: String?
-    public var categoryId: UUID
-    public var categorySource: String
-    public var tags: [String]
-    public var nature: Nature?
-    public var paymentMethod: String?
-    public var note: String?
-    public var createdAt: String?
-    public var deletedAt: String?
-
-    public init(
-        id: UUID, entryId: UUID? = nil, type: TxType, amount: Int, occurredOn: String, item: String,
-        merchant: String? = nil, categoryId: UUID, categorySource: String = "ai", tags: [String] = [],
-        nature: Nature? = nil, paymentMethod: String? = nil, note: String? = nil,
-        createdAt: String? = nil, deletedAt: String? = nil
-    ) {
-        self.id = id
-        self.entryId = entryId
-        self.type = type
-        self.amount = amount
-        self.occurredOn = occurredOn
-        self.item = item
-        self.merchant = merchant
-        self.categoryId = categoryId
-        self.categorySource = categorySource
-        self.tags = tags
-        self.nature = nature
-        self.paymentMethod = paymentMethod
-        self.note = note
-        self.createdAt = createdAt
-        self.deletedAt = deletedAt
-    }
-}
-
-/// 等使用者確認的草稿。reasons 說明為什麼沒有直接入帳。
-public struct Draft: Codable, Identifiable, Hashable, Sendable {
-    public var id = UUID()
-    public var type: TxType
-    public var amount: Int
-    public var occurredOn: String
-    public var item: String
-    public var merchant: String?
-    public var categoryId: UUID?
-    public var categoryName: String?
-    public var tags: [String]
-    public var nature: Nature?
-    public var paymentMethod: String?
-    public var reasons: [String]
-
-    enum CodingKeys: String, CodingKey {
-        case type, amount, occurredOn, item, merchant, categoryId, categoryName, tags, nature, paymentMethod, reasons
-    }
-
-    public init(
-        type: TxType, amount: Int, occurredOn: String, item: String, merchant: String? = nil,
-        categoryId: UUID? = nil, categoryName: String? = nil, tags: [String] = [], nature: Nature? = nil,
-        paymentMethod: String? = nil, reasons: [String] = []
-    ) {
-        self.type = type
-        self.amount = amount
-        self.occurredOn = occurredOn
-        self.item = item
-        self.merchant = merchant
-        self.categoryId = categoryId
-        self.categoryName = categoryName
-        self.tags = tags
-        self.nature = nature
-        self.paymentMethod = paymentMethod
-        self.reasons = reasons
-    }
-
-    /// 送出前的檢查。回傳空陣列代表可以送。
-    public func problems(today: String) -> [String] {
-        var out: [String] = []
-        if amount <= 0 { out.append("金額要大於 0") }
-        if item.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { out.append("需要填品項") }
-        if categoryId == nil { out.append("需要選分類") }
-        if occurredOn > today { out.append("日期不能在未來") }
-        return out
-    }
-}
-
-public struct Evidence: Codable, Hashable, Sendable {
-    public let tool: String
-    public let count: Int
-    public let total: Int
-    public let transactionIds: [UUID]
-
-    public init(tool: String, count: Int, total: Int, transactionIds: [UUID]) {
-        self.tool = tool
-        self.count = count
-        self.total = total
-        self.transactionIds = transactionIds
-    }
-}
-
-public struct AskAnswer: Codable, Hashable, Sendable {
-    public let answer: String
-    public let evidence: [Evidence]
-
-    public init(answer: String, evidence: [Evidence]) {
-        self.answer = answer
-        self.evidence = evidence
-    }
-
-    /// 依據的筆數與交易（跨多個工具呼叫時去重複）。
-    public var evidenceIds: [UUID] {
-        var seen = Set<UUID>()
-        return evidence.flatMap(\.transactionIds).filter { seen.insert($0).inserted }
-    }
-
-    public var evidenceCount: Int {
-        let ids = evidenceIds.count
-        return ids > 0 ? ids : (evidence.map(\.count).max() ?? 0)
-    }
-}
-
-/// POST /record 的四種結果，加上取消確認。
-public enum RecordResult: Decodable, Sendable {
-    case committed([Txn])
-    case needsConfirm([Draft])
-    case answer(AskAnswer)
-    case unclear(String)
-    case cancelled
-
-    enum CodingKeys: String, CodingKey {
-        case result, transactions, drafts, message
-    }
-
-    public init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: CodingKeys.self)
-        let kind = try c.decode(String.self, forKey: .result)
-        switch kind {
-        case "committed":
-            self = .committed(try c.decode([Txn].self, forKey: .transactions))
-        case "needs_confirm":
-            self = .needsConfirm(try c.decode([Draft].self, forKey: .drafts))
-        case "answer":
-            self = .answer(try AskAnswer(from: decoder))
-        case "unclear":
-            self = .unclear(try c.decodeIfPresent(String.self, forKey: .message) ?? "看不太懂這句，可以補上金額再試一次。")
-        case "cancelled":
-            self = .cancelled
-        default:
-            throw DecodingError.dataCorruptedError(forKey: .result, in: c, debugDescription: "未知的 result：\(kind)")
-        }
-    }
-}
-
-public struct CategoryTotal: Codable, Identifiable, Hashable, Sendable {
+/// 一筆紀錄被改之前的樣子。修改不覆蓋掉原值。
+public struct TxnRevision: Codable, Hashable, Sendable {
+    public let replacedAt: Date
+    public let type: TxType
+    public let amount: Int
+    public let occurredOn: String
     public let categoryId: UUID
-    public let name: String
-    public let icon: String
-    public let total: Int
-    public let count: Int
-
-    public var id: UUID { categoryId }
-
-    public init(categoryId: UUID, name: String, icon: String, total: Int, count: Int) {
-        self.categoryId = categoryId
-        self.name = name
-        self.icon = icon
-        self.total = total
-        self.count = count
-    }
+    public let isOneOff: Bool
 }
 
-public struct MonthlyOverview: Codable, Hashable, Sendable {
-    public let month: String
-    public let totalExpense: Int
-    public let totalIncome: Int
-    public let routineExpense: Int
-    public let oneOffExpense: Int
-    public let transactionCount: Int
-    public let byCategory: [CategoryTotal]
+/// 使用者在記帳畫面填的內容。
+public struct TxnFields: Hashable, Sendable {
+    public var type: TxType
+    public var amount: Int
+    public var occurredOn: String
+    public var categoryId: UUID
+    public var note: String
+    public var isOneOff: Bool
 
     public init(
-        month: String, totalExpense: Int, totalIncome: Int, routineExpense: Int, oneOffExpense: Int,
-        transactionCount: Int, byCategory: [CategoryTotal]
+        type: TxType, amount: Int, occurredOn: String, categoryId: UUID, note: String = "", isOneOff: Bool = false
     ) {
+        self.type = type
+        self.amount = amount
+        self.occurredOn = occurredOn
+        self.categoryId = categoryId
+        self.note = note
+        self.isOneOff = isOneOff
+    }
+}
+
+/// 一筆紀錄。金額是正整數（新台幣元），日期是使用者選的 yyyy-MM-dd。
+public struct Txn: Codable, Identifiable, Hashable, Sendable {
+    public static let currentSchema = 1
+
+    public let id: UUID
+    public private(set) var type: TxType
+    public private(set) var amount: Int
+    public private(set) var occurredOn: String
+    public private(set) var categoryId: UUID
+    public private(set) var note: String
+    /// 一次性的支出：總額照算，跟平常比的時候不算。
+    public private(set) var isOneOff: Bool
+    public let createdAt: Date
+    /// 記下這筆時的時區。
+    public let timeZone: String
+    public var deletedAt: Date?
+    public private(set) var revisions: [TxnRevision]
+    public let schemaVersion: Int
+
+    public init(id: UUID = UUID(), fields: TxnFields, createdAt: Date, timeZone: String) {
+        self.id = id
+        self.type = fields.type
+        self.amount = fields.amount
+        self.occurredOn = fields.occurredOn
+        self.categoryId = fields.categoryId
+        self.note = fields.note
+        self.isOneOff = fields.type == .expense && fields.isOneOff
+        self.createdAt = createdAt
+        self.timeZone = timeZone
+        self.deletedAt = nil
+        self.revisions = []
+        self.schemaVersion = Self.currentSchema
+    }
+
+    public var fields: TxnFields {
+        TxnFields(
+            type: type, amount: amount, occurredOn: occurredOn, categoryId: categoryId, note: note, isOneOff: isOneOff
+        )
+    }
+
+    /// 套用修改。會影響數字的欄位有變，就把原值留在 revisions。
+    public func applying(_ new: TxnFields, at date: Date) -> Txn {
+        var copy = self
+        let oneOff = new.type == .expense && new.isOneOff
+        let changed = new.type != type || new.amount != amount || new.occurredOn != occurredOn
+            || new.categoryId != categoryId || oneOff != isOneOff
+        if changed {
+            copy.revisions.append(TxnRevision(
+                replacedAt: date, type: type, amount: amount, occurredOn: occurredOn,
+                categoryId: categoryId, isOneOff: isOneOff
+            ))
+        }
+        copy.type = new.type
+        copy.amount = new.amount
+        copy.occurredOn = new.occurredOn
+        copy.categoryId = new.categoryId
+        copy.note = new.note
+        copy.isOneOff = oneOff
+        return copy
+    }
+
+    public var category: TxCategory? { Categories.find(categoryId) }
+
+    /// 清單上的標題：有備註用備註，沒有就用分類名。
+    public var title: String { note.isEmpty ? (category?.name ?? "其他") : note }
+}
+
+/// 每月預算。每改一次新增一筆，舊的月份繼續用當時的數字。
+public struct Budget: Codable, Identifiable, Hashable, Sendable {
+    public let id: UUID
+    /// 從哪個月開始生效（yyyy-MM-01）。
+    public let month: String
+    /// 0 代表從這個月起不訂預算。
+    public let amount: Int
+    public let createdAt: Date
+
+    public init(id: UUID = UUID(), month: String, amount: Int, createdAt: Date) {
+        self.id = id
         self.month = month
-        self.totalExpense = totalExpense
-        self.totalIncome = totalIncome
-        self.routineExpense = routineExpense
-        self.oneOffExpense = oneOffExpense
-        self.transactionCount = transactionCount
-        self.byCategory = byCategory
-    }
-}
-
-public struct Profile: Codable, Hashable, Sendable {
-    public var autoCommit: Bool
-    public var autoCommitMax: Int?
-
-    public init(autoCommit: Bool = true, autoCommitMax: Int? = nil) {
-        self.autoCommit = autoCommit
-        self.autoCommitMax = autoCommitMax
-    }
-}
-
-public struct APIErrorBody: Codable, Hashable, Sendable {
-    public let code: String
-    public let message: String
-}
-
-/// 後端統一回傳格式：{ success, data, error, request_id }
-public struct APIEnvelope<T: Decodable>: Decodable {
-    public let success: Bool
-    public let data: T?
-    public let error: APIErrorBody?
-    public let requestId: String?
-}
-
-public enum JSONCoding {
-    public static func decoder() -> JSONDecoder {
-        let d = JSONDecoder()
-        d.keyDecodingStrategy = .convertFromSnakeCase
-        return d
+        self.amount = amount
+        self.createdAt = createdAt
     }
 
-    public static func encoder() -> JSONEncoder {
-        let e = JSONEncoder()
-        e.keyEncodingStrategy = .convertToSnakeCase
-        return e
+    /// 某個月適用的預算，沒訂就是 nil。
+    public static func amount(for month: String, in budgets: [Budget]) -> Int? {
+        let latest = budgets
+            .filter { $0.month <= month }
+            .max { ($0.month, $0.createdAt) < ($1.month, $1.createdAt) }
+        guard let latest, latest.amount > 0 else { return nil }
+        return latest.amount
     }
 }

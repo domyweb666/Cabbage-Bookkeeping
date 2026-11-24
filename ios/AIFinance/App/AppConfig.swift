@@ -1,32 +1,32 @@
+import FinanceCore
 import Foundation
 
-/// 環境設定。Supabase 的網址與 anon key 在建置時由 xcconfig／CI 寫進 Info.plist，不寫死在程式碼裡。
-/// App 裡只會有 anon key；AI 金鑰與 service role key 只存在後端。
+/// 畫面測試用的啟動參數。平常打開 App 時全部是關的。
 struct AppConfig {
-    struct Supabase {
-        let url: URL
-        let anonKey: String
-    }
-
-    /// 沒有設定時為 nil，App 會進入示範模式。
-    let supabase: Supabase?
-    /// 示範模式是否預先放幾筆資料（畫面測試用）。
-    let seedDemoData: Bool
-    /// 強制用深色外觀（畫面測試用，啟動參數 -forceDark）。
-    var forceDark: Bool { ProcessInfo.processInfo.arguments.contains("-forceDark") }
+    /// 資料只放記憶體，關掉就清空（-memoryStore）。
+    let inMemory: Bool
+    /// 預先放一份假資料（-demo fresh／steady／returning），同時強制用記憶體。
+    let demo: DemoData?
+    /// 強制深色外觀（-forceDark）。
+    let forceDark: Bool
+    /// 指定今天是哪一天（-today 2026-11-25）。
+    let today: String?
+    /// 提示條停留秒數，測試時拉長（-slowToast）。
+    let toastSeconds: UInt64
 
     static let current: AppConfig = {
         let arguments = ProcessInfo.processInfo.arguments
-        let forceDemo = arguments.contains("-demoBackend")
-        let seed = arguments.contains("-demoSeed")
-
-        let info = Bundle.main.infoDictionary ?? [:]
-        let host = (info["SupabaseHost"] as? String ?? "").trimmingCharacters(in: .whitespaces)
-        let key = (info["SupabaseAnonKey"] as? String ?? "").trimmingCharacters(in: .whitespaces)
-
-        guard !forceDemo, !host.isEmpty, !key.isEmpty, let url = URL(string: "https://\(host)") else {
-            return AppConfig(supabase: nil, seedDemoData: seed)
+        func value(after name: String) -> String? {
+            guard let i = arguments.firstIndex(of: name), i + 1 < arguments.count else { return nil }
+            return arguments[i + 1]
         }
-        return AppConfig(supabase: Supabase(url: url, anonKey: key), seedDemoData: false)
+        let demo = value(after: "-demo").flatMap(DemoData.init(rawValue:))
+        return AppConfig(
+            inMemory: demo != nil || arguments.contains("-memoryStore"),
+            demo: demo,
+            forceDark: arguments.contains("-forceDark"),
+            today: value(after: "-today"),
+            toastSeconds: arguments.contains("-slowToast") ? 60 : 5
+        )
     }()
 }
