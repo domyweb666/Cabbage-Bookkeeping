@@ -24,10 +24,10 @@ struct LeftProvider: TimelineProvider {
         completion(Self.entry(at: Date(), snapshot: context.isPreview ? saved ?? Self.sample : saved))
     }
 
-    func getTimeline(in context: Context, completion: @escaping (Timeline<LeftEntry>) -> Void) {
+    func getTimeline(in context: Context, completion: @escaping (WidgetKit.Timeline<LeftEntry>) -> Void) {
         let snapshot = WidgetBridge.read()
         let entries = Self.dates(from: Date()).map { Self.entry(at: $0, snapshot: snapshot) }
-        completion(Timeline(entries: entries, policy: .atEnd))
+        completion(WidgetKit.Timeline(entries: entries, policy: .atEnd))
     }
 
     private static func entry(at date: Date, snapshot: WidgetSnapshot?) -> LeftEntry {
