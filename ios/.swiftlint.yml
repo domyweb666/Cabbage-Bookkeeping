@@ -71,6 +71,7 @@ custom_rules:
   no_raw_duration:
     name: "畫面不准寫死動畫秒數"
     regex: 'duration: *[0-9]'
+    excluded: '.*/DesignSystem/Theme\.swift'
     message: "動畫從 Motion 拿"
     severity: error
   no_scale_name:

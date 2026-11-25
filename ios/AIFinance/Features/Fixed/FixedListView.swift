@@ -30,7 +30,7 @@ struct FixedListView: View {
                     if !yearly.isEmpty { section(Words.Fixed.yearly, yearly) }
                 }
                 .ledgerList()
-                .animation(reduceMotion ? nil : Motion.change, value: monthly + yearly)
+                .animation(reduceMotion ? Motion.changeReduced : Motion.change, value: monthly + yearly)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

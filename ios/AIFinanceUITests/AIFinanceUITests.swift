@@ -104,7 +104,12 @@ final class AIFinanceUITests: XCTestCase {
         app.tabBars.buttons["設定"].tap()
         XCTAssertTrue(app.buttons["categoriesRow"].waitForExistence(timeout: 30))
         app.buttons["categoriesRow"].tap()
-        XCTAssertTrue(app.buttons["edit_飲食"].waitForExistence(timeout: 30))
+        // CI 的模擬器忙的時候，剛換分頁的第一下會被吃掉（2026-11-25 碰過），還停在設定頁就再點一次。
+        let first = app.buttons["edit_飲食"]
+        if !first.waitForExistence(timeout: 10), app.buttons["categoriesRow"].exists {
+            app.buttons["categoriesRow"].tap()
+        }
+        XCTAssertTrue(first.waitForExistence(timeout: 30))
     }
 
     private func clear(_ field: XCUIElement, characters: Int) {
@@ -185,6 +190,18 @@ final class AIFinanceUITests: XCTestCase {
         XCTAssertTrue(app.buttons["entrySave"].waitForExistence(timeout: 10))
         app.buttons["entrySave"].tap()
         XCTAssertTrue(row("加油", "交通", "NT$50").waitForExistence(timeout: 10))
+    }
+
+    /// 按一下刪一位，按住連刪。
+    func testHoldBackspace() {
+        launch()
+        openEntry()
+        press("1", "2", "3", "4", "5", "6", "7", "8")
+        XCTAssertTrue(wait("entryAmount", contains: "12,345,678"))
+        press("back")
+        XCTAssertTrue(wait("entryAmount", contains: "1,234,567"))
+        app.buttons["key_back"].press(forDuration: 4)
+        XCTAssertEqual(any("entryAmount").label, "0", "按住要一路刪到零")
     }
 
     func testEditAndDelete() {

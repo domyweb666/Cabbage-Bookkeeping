@@ -230,7 +230,7 @@ struct LedgerView: View {
         }
         .ledgerList()
         .contentMargins(.top, 0, for: .scrollContent)
-        .animation(reduceMotion ? nil : Motion.change, value: sections)
+        .animation(reduceMotion ? Motion.changeReduced : Motion.change, value: sections)
     }
 }
 

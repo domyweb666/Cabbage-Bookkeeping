@@ -11,6 +11,7 @@ struct EntrySheet: View {
     @Environment(LedgerModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     @Environment(\.dynamicTypeSize) private var typeSize
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let mode: Mode
 
     @State private var type: TxType = .expense
@@ -75,7 +76,7 @@ struct EntrySheet: View {
                     // 點到露一半的格子，捲到看得到整格。
                     .onChange(of: categoryId) { _, id in
                         guard let id, !isLarge else { return }
-                        withAnimation(Motion.change) { proxy.scrollTo(id) }
+                        withAnimation(scrollMotion) { proxy.scrollTo(id) }
                     }
                     .scrollDismissesKeyboard(.interactively)
                     // 分類超過一個畫面時閃一下捲軸，看得出下面還有。
@@ -84,7 +85,7 @@ struct EntrySheet: View {
                     // 鍵盤升完再捲到底，備註欄才不會貼著鍵盤。
                     .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardDidShowNotification)) { _ in
                         guard noteFocused, typeSize.isAccessibilitySize else { return }
-                        withAnimation(Motion.change) { proxy.scrollTo(Self.contentID, anchor: .bottom) }
+                        withAnimation(scrollMotion) { proxy.scrollTo(Self.contentID, anchor: .bottom) }
                     }
                 }
 
@@ -128,6 +129,8 @@ struct EntrySheet: View {
                 .tint(Theme.accent)
         }
         .onAppear(perform: load)
+        // 填的時候先叫醒震動，按「記下」那一下才準時。叫醒只維持幾秒，所以每動一次叫一次。
+        .onChange(of: form) { _, _ in Haptics.prepareSaved() }
         .onChange(of: type) { _, newType in
             // 換成收入或支出時，對不上的分類要清掉。
             categoryId = model.book.selection(categoryId, kind: newType, keeping: original?.categoryId)
@@ -137,6 +140,9 @@ struct EntrySheet: View {
             categoryId = book.selection(categoryId, kind: type, keeping: original?.categoryId)
         }
     }
+
+    /// 減少動態時直接捲到位。
+    private var scrollMotion: Animation? { reduceMotion ? nil : Motion.change }
 
     private var isLarge: Bool { typeSize.isAccessibilitySize }
 
@@ -192,7 +198,6 @@ struct EntrySheet: View {
                     .foregroundStyle(Theme.secondaryText)
                 AmountText(
                     text: Money.grouped(pad.value),
-                    value: pad.value,
                     color: pad.value == 0 ? Theme.secondaryText : Theme.primaryText,
                     font: .system(.largeTitle, design: .rounded).bold()
                 )
@@ -413,6 +418,8 @@ private struct Keypad: View {
                         .frame(maxWidth: .infinity, minHeight: Self.tallHeight)
                         .background(Theme.card, in: RoundedRectangle(cornerRadius: Theme.keyRadius, style: .continuous))
                 }
+                // 按住連刪。
+                .buttonRepeatBehavior(.enabled)
                 .accessibilityLabel(Words.Entry.backspace)
                 .accessibilityIdentifier("key_back")
 

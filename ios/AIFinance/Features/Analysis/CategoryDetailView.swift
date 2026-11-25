@@ -42,7 +42,7 @@ struct CategoryDetailView: View {
             }
         }
         .ledgerList()
-        .animation(reduceMotion ? nil : Motion.change, value: rows)
+        .animation(reduceMotion ? Motion.changeReduced : Motion.change, value: rows)
         .background(Theme.background.ignoresSafeArea())
         .navigationTitle(category?.name ?? Words.Ledger.otherCategory)
         .navigationBarTitleDisplayMode(.inline)
