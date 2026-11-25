@@ -34,7 +34,7 @@ App 現在有三個分頁：
 
 取消勾選不會動到記過的紀錄，分析頁照樣列出那一類。
 
-2026-11-25 畫面照 `E:\多米ios開發準則` 改過一輪，每一條的對照在 `.uiux/準則對照.md`。程式還沒上過 TestFlight，也沒在真機跑過，要準備的東西在 [docs/SETUP.md](docs/SETUP.md)。
+2026-11-25 畫面照 `E:\多米ios開發準則` 改過一輪，每一條的對照在 `.uiux/準則對照.md`。程式還沒上過 TestFlight，也沒在真機跑過，要準備的東西在 [docs/SETUP.md](docs/SETUP.md)。出 TestFlight 只能手動按，推到 `main` 不會出版。
 
 | 想知道什麼 | 看哪裡 |
 |---|---|
@@ -61,6 +61,7 @@ ios/
   AIFinanceUITests/       畫面測試
   Packages/FinanceCore/   日期、金額、分類、分析算法、分析頁文案、CSV，含單元測試
   project.yml             Xcode 專案設定（XcodeGen）
+  ci/                     出 TestFlight 用的簽章與上傳腳本，不含任何金鑰
   .swiftlint.yml          擋裸數字、連網、直接震動的規則，CI 先跑不擋
 .analytics/               分析頁的設計檔
 .uiux/                    對多米 iOS 開發準則的對照、閘門紀錄

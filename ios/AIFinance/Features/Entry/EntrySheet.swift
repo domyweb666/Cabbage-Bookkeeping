@@ -237,7 +237,10 @@ struct EntrySheet: View {
                 isOneOff.toggle()
             } label: {
                 // 說明寫在同一排，勾了也不會多一行把分類格擠掉。
-                Label(isOneOff ? Words.Entry.oneOffOn : Words.Ledger.oneOff, systemImage: isOneOff ? "checkmark.circle.fill" : "circle")
+                Label(
+                    isOneOff ? Words.Entry.oneOffOn : Words.Ledger.oneOff,
+                    systemImage: isOneOff ? "checkmark.circle.fill" : "circle"
+                )
                     .font(Typo.subheadline.font)
                     .lineLimit(1)
                     .fixedSize(horizontal: true, vertical: false)

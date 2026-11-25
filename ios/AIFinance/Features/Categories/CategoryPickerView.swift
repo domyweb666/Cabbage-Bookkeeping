@@ -75,7 +75,11 @@ struct CategoryPickerView: View {
                 }
             }
         }
-        .navigationDestination(item: $target) { CategoryEditView(target: $0) }
+        // 用 sheet 不用往右推：推進去的畫面，左滑返回有時擋不住，打到一半的字會丟。
+        .sheet(item: $target) { target in
+            NavigationStack { CategoryEditView(target: target) }
+                .tint(Theme.accent)
+        }
         .alert(Words.Categories.resetTitle(kind), isPresented: $confirmReset) {
             Button(Words.Categories.reset, role: .destructive) { change { $0.reset(kind) } }
             Button(Words.cancel, role: .cancel) {}
