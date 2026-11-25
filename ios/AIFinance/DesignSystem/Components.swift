@@ -42,6 +42,7 @@ extension View {
 }
 
 /// 金額文字：數字等寬，避免跳動。給了 value，數字變的時候會滾過去。
+/// 使用者正在打的數字不要給 value，一按就換。
 struct AmountText: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 

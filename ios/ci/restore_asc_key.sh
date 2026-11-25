@@ -44,8 +44,22 @@ if ! LC_ALL=C head -c 27 "$OUT" | LC_ALL=C grep -q -e '-----BEGIN PRIVATE KEY---
   exit 1
 fi
 if ! openssl pkey -in "$OUT" -noout 2> /dev/null; then
+  # 貼上時換行常常不見或變成空白，內容其實都在。拿掉頭尾和空白，照 64 字一行重排再驗一次。
+  body="$(LC_ALL=C tr -d '[:space:]' < "$OUT")"
+  body="${body#-----BEGINPRIVATEKEY-----}"
+  body="${body%-----ENDPRIVATEKEY-----}"
+  if is_base64 "$body"; then
+    {
+      echo "-----BEGIN PRIVATE KEY-----"
+      echo "$body" | fold -w 64
+      echo "-----END PRIVATE KEY-----"
+    } > "$OUT"
+    form="${form}，換行重排過"
+  fi
+fi
+if ! openssl pkey -in "$OUT" -noout 2> /dev/null; then
   rm -f "$OUT"
-  echo "::error::ASC_KEY_P8_BASE64 有開頭，但金鑰內容讀不了（放法：${form}，${bytes} bytes，正常約 257）。可能缺了幾行，或換行不見了。"
+  echo "::error::ASC_KEY_P8_BASE64 有開頭，但金鑰內容讀不了（放法：${form}，${bytes} bytes，正常約 257）。重排換行也沒用，多半是少了一段，照 docs/上架指南.md 步驟 7 重放。"
   exit 1
 fi
 echo "API 金鑰格式正確（放法：${form}，${bytes} bytes）"

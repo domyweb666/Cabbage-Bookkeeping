@@ -75,11 +75,12 @@ enum Theme {
     }
 }
 
-/// 動作代號（準則附錄 E）。畫面只從這裡拿動畫，不寫秒數。
-/// 減少動態打開時：縮放不做、數字改淡入淡出、清單增減不動。
+/// 動作代號（準則 3-41、附錄 E）。畫面只從這裡拿動畫；秒數只寫在這裡，每一個都要寫，不寫的話預設是 0.5 秒。
+/// 減少動態打開時：縮放不做、數字改淡入淡出、清單增減用 changeReduced、自動捲動直接到位。
 enum Motion {
-    static let press = Animation.snappy
-    static let change = Animation.snappy
+    static let press = Animation.snappy(duration: 0.15)
+    static let change = Animation.snappy(duration: 0.25)
+    static let changeReduced = Animation.easeInOut(duration: 0.2)
     static let pressScale: CGFloat = 0.96
     static let pressOpacity: Double = 0.85
 }

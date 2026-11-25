@@ -11,14 +11,23 @@ import VeggieKit
 /// | 選分類、選圖示、勾常用分類（存成了才震） | selection |
 @MainActor
 enum Haptics {
+    /// 留著同一個，先叫醒的和真的震的才會是同一個。
+    private static let notification = UINotificationFeedbackGenerator()
+
+    /// 快要存之前先叫醒，不會震。
+    static func prepareSaved() {
+        guard VeggieHaptics.isEnabled else { return }
+        notification.prepare()
+    }
+
     static func saved() {
         guard VeggieHaptics.isEnabled else { return }
-        UINotificationFeedbackGenerator().notificationOccurred(.success)
+        notification.notificationOccurred(.success)
     }
 
     static func failed() {
         guard VeggieHaptics.isEnabled else { return }
-        UINotificationFeedbackGenerator().notificationOccurred(.error)
+        notification.notificationOccurred(.error)
     }
 
     static func deleted() {
