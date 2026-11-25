@@ -69,6 +69,12 @@ public struct Days: Sendable {
         return parts.count >= 2 ? "\(parts[1]) 月" : day
     }
 
+    /// "2026-11-05" → "11/5"
+    public static func slash(_ day: String) -> String {
+        let parts = day.split(separator: "-").compactMap { Int($0) }
+        return parts.count == 3 ? "\(parts[1])/\(parts[2])" : day
+    }
+
     /// "2026-11-15" → "2026 年 11 月"
     public func monthTitle(of day: String) -> String {
         let parts = day.split(separator: "-").compactMap { Int($0) }

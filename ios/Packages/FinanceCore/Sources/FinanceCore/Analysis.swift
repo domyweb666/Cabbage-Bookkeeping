@@ -67,11 +67,20 @@ public struct MonthTotal: Identifiable, Hashable, Sendable {
 
 public struct BudgetStatus: Hashable, Sendable {
     public let budget: Int
+    /// 這個月記的，不含每年一次的固定支出。
     public let spent: Int
+    /// 這個月還沒到的每月固定。
+    public let pending: Int
+    /// 每年一次的，這個月先留的十二分之一。
+    public let yearlyShare: Int
+    /// 這個月記了多少每年一次的固定支出。
+    public let yearlyPaid: Int
     /// 含今天還剩幾天；看以前的月份時是 0。
     public let daysLeft: Int
 
-    public var left: Int { budget - spent }
+    /// 先留給固定支出的。
+    public var reserved: Int { pending + yearlyShare }
+    public var left: Int { budget - spent - reserved }
     /// 剩下的錢分給剩下的天數。超過預算或月份已經結束就沒有。
     public var perDay: Int? { left > 0 && daysLeft > 0 ? left / daysLeft : nil }
 }
@@ -91,6 +100,8 @@ public struct MonthReport: Hashable, Sendable {
     public let observation: SpendingNote?
     public let biggest: [Txn]
     public let budget: BudgetStatus?
+    /// 一段太長的空窗，可以補一個大概的數字。
+    public let gapToFill: DayRange?
 
     /// 拿來跟平常比的數字：不含一次性。
     public var routine: Int { expense - oneOff }
@@ -121,7 +132,8 @@ public enum Analysis {
     // MARK: - 一個月的報告
 
     public static func report(
-        month anyDay: String, today: String, transactions: [Txn], budgets: [Budget], book: CategoryBook, days: Days
+        month anyDay: String, today: String, transactions: [Txn], budgets: [Budget], book: CategoryBook, days: Days,
+        fixed: [FixedExpense] = []
     ) -> MonthReport {
         let month = days.monthStart(of: anyDay)
         let isCurrent = month == days.monthStart(of: today)
@@ -135,7 +147,8 @@ public enum Analysis {
         let baselineExpenses = baseline.map { m in
             // 這個月還沒過完，就拿以前同一天為止的金額比；過完了就整個月比整個月。
             inMonth(m, alive).filter {
-                $0.type == .expense && !$0.isOneOff && (!isCurrent || Days.number(of: $0.occurredOn) <= throughDay)
+                $0.type == .expense && !$0.isOneOff
+                    && (!isCurrent || $0.estimate != nil || Days.number(of: $0.occurredOn) <= throughDay)
             }
         }
         let comparison = compare(
@@ -144,12 +157,10 @@ public enum Analysis {
         let lines = categoryLines(
             expenses: expenses, baseline: comparison.range == nil ? [] : baselineExpenses, book: book
         )
-        let budget = Budget.amount(for: month, in: budgets).map {
-            BudgetStatus(
-                budget: $0, spent: expense,
-                daysLeft: isCurrent ? days.length(ofMonth: month) - throughDay + 1 : 0
-            )
-        }
+        let budget = budgetStatus(
+            month: month, today: today, expenses: expenses, transactions: transactions, budgets: budgets,
+            fixed: fixed, days: days
+        )
 
         return MonthReport(
             month: month,
@@ -164,10 +175,58 @@ public enum Analysis {
             observation: observe(
                 lines: lines, expenses: expenses, baseline: baselineExpenses, throughDay: throughDay, book: book
             ),
-            biggest: expenses.count < minRecords ? [] : Array(expenses.sorted {
-                $0.amount == $1.amount ? $0.createdAt > $1.createdAt : $0.amount > $1.amount
-            }.prefix(biggestCount)),
-            budget: budget
+            biggest: biggest(of: expenses),
+            budget: budget,
+            gapToFill: gapToFill(
+                rows: rows, month: month, isCurrent: isCurrent, throughDay: throughDay,
+                firstDay: alive.filter { $0.fixed == nil }.map(\.occurredOn).min()
+            )
+        )
+    }
+
+    /// 記帳頁和小工具上的數字。跟 report 用同一套算法，少算比較的部分。
+    public static func homeFigures(
+        today: String, transactions: [Txn], budgets: [Budget], fixed: [FixedExpense], days: Days
+    ) -> HomeFigures {
+        let month = days.monthStart(of: today)
+        let expenses = inMonth(month, transactions).filter { $0.deletedAt == nil && $0.type == .expense }
+        return HomeFigures(
+            expense: sum(expenses),
+            budget: budgetStatus(
+                month: month, today: today, expenses: expenses, transactions: transactions, budgets: budgets,
+                fixed: fixed, days: days
+            )
+        )
+    }
+
+    /// 還能花 = 預算 − 這個月記的（每年一次的不算）− 還沒到的每月固定 − 每年一次的十二分之一。
+    private static func budgetStatus(
+        month: String, today: String, expenses: [Txn], transactions: [Txn], budgets: [Budget],
+        fixed: [FixedExpense], days: Days
+    ) -> BudgetStatus? {
+        guard let amount = Budget.amount(for: month, in: budgets) else { return nil }
+        let isCurrent = month == days.monthStart(of: today)
+        let length = days.length(ofMonth: month)
+        let lastDay = String(month.prefix(8)) + String(format: "%02d", length)
+        let yearly = expenses.filter { $0.fixed?.isYearly == true }
+        return BudgetStatus(
+            budget: amount,
+            spent: sum(expenses) - sum(yearly),
+            pending: isCurrent
+                ? FixedPlan.pending(items: fixed, transactions: transactions, today: today, days: days) : 0,
+            yearlyShare: FixedPlan.yearlyShare(items: fixed, month: month, on: isCurrent ? today : lastDay),
+            yearlyPaid: sum(yearly),
+            daysLeft: isCurrent ? length - Days.number(of: today) + 1 : 0
+        )
+    }
+
+    /// 最大的幾筆。大概的數字不是一筆花費，不列。
+    private static func biggest(of expenses: [Txn]) -> [Txn] {
+        guard handCount(expenses) >= minRecords else { return [] }
+        return Array(
+            expenses.filter { $0.estimate == nil }
+                .sorted { $0.amount == $1.amount ? $0.createdAt > $1.createdAt : $0.amount > $1.amount }
+                .prefix(biggestCount)
         )
     }
 
@@ -190,11 +249,17 @@ public enum Analysis {
     }
 
     /// 訂預算時給的參考：最近幾個可以比的月份，整個月花多少（含一次性，因為預算也含）。
-    public static func monthlyRange(today: String, transactions: [Txn], days: Days) -> UsualRange? {
+    /// 每年一次的固定支出不整筆算，改加每個月先留的那一份，跟還能花的算法一致。
+    public static func monthlyRange(
+        today: String, transactions: [Txn], days: Days, fixed: [FixedExpense] = []
+    ) -> UsualRange? {
         let alive = transactions.filter { $0.deletedAt == nil }
         let months = comparableMonths(before: days.monthStart(of: today), transactions: alive, days: days)
         guard months.count >= minBaselineMonths else { return nil }
-        return range(months.map { sum(inMonth($0, alive).filter { $0.type == .expense }) })
+        let share = FixedPlan.yearlyShare(items: fixed, month: today, on: today)
+        return range(months.map { month in
+            share + sum(inMonth(month, alive).filter { $0.type == .expense && $0.fixed?.isYearly != true })
+        })
     }
 
     /// 某個分類這個月到目前為止的金額（記完一筆之後那一行用）。
@@ -214,7 +279,7 @@ public enum Analysis {
         for back in 1...lookbackMonths where found.count < maxBaselineMonths {
             let m = days.adding(months: -back, toMonthOf: month)
             let rows = inMonth(m, transactions)
-            guard rows.filter({ $0.type == .expense }).count >= minRecords,
+            guard handCount(rows.filter { $0.type == .expense }) >= minRecords,
                   longestGap(rows, through: days.length(ofMonth: m)) <= maxGapDays else { continue }
             found.append(m)
         }
@@ -222,8 +287,9 @@ public enum Analysis {
     }
 
     /// 從一號到指定那天，最長連續幾天沒有紀錄。月初還沒開始記、記到一半停掉都算。
+    /// 自動記的不算有在記帳；補過大概的那幾天算。
     static func longestGap(_ rows: [Txn], through day: Int) -> Int {
-        let recorded = Set(rows.map { Days.number(of: $0.occurredOn) })
+        let recorded = recordedDays(rows)
         var longest = 0
         var run = 0
         for d in stride(from: 1, through: day, by: 1) {
@@ -231,6 +297,52 @@ public enum Analysis {
             longest = max(longest, run)
         }
         return longest
+    }
+
+    private static func recordedDays(_ rows: [Txn]) -> Set<Int> {
+        var recorded = Set<Int>()
+        for row in rows where row.fixed == nil {
+            recorded.insert(Days.number(of: row.occurredOn))
+            if let estimate = row.estimate {
+                recorded.formUnion(coveredDays(estimate))
+            }
+        }
+        return recorded
+    }
+
+    private static func coveredDays(_ range: DayRange) -> Set<Int> {
+        let from = Days.number(of: range.from)
+        let to = Days.number(of: range.to)
+        return from <= to ? Set(from...to) : []
+    }
+
+    /// 自己記的有幾筆。大概的數字抵那幾天，一天算一筆。
+    private static func handCount(_ expenses: [Txn]) -> Int {
+        expenses.reduce(0) { count, row in
+            guard row.fixed == nil else { return count }
+            return count + (row.estimate.map { coveredDays($0).count } ?? 1)
+        }
+    }
+
+    /// 最長的一段空窗。開始用之前的日子不算，今天還沒過完也不算。
+    private static func gapToFill(
+        rows: [Txn], month: String, isCurrent: Bool, throughDay: Int, firstDay: String?
+    ) -> DayRange? {
+        guard let firstDay, longestGap(rows, through: throughDay) > maxGapDays else { return nil }
+        let prefix = String(month.prefix(8))
+        guard firstDay.prefix(7) <= month.prefix(7) else { return nil }
+        let start = firstDay.hasPrefix(prefix) ? Days.number(of: firstDay) + 1 : 1
+        let last = isCurrent ? throughDay - 1 : throughDay
+        let recorded = recordedDays(rows)
+        var best: (from: Int, length: Int) = (0, 0)
+        var length = 0
+        for day in stride(from: start, through: last, by: 1) {
+            length = recorded.contains(day) ? 0 : length + 1
+            if length > best.length { best = (day - length + 1, length) }
+        }
+        guard best.length >= maxGapDays else { return nil }
+        func text(_ day: Int) -> String { prefix + String(format: "%02d", day) }
+        return DayRange(from: text(best.from), to: text(best.from + best.length - 1))
     }
 
     private static func compare(
@@ -242,7 +354,8 @@ public enum Analysis {
         if isCurrent && throughDay < compareFromDay { return .tooEarly }
         let gap = longestGap(rows, through: throughDay)
         if gap > maxGapDays { return .gap(days: gap) }
-        return .ready(range(baseline.map { sum($0) }))
+        let cutoff = isCurrent ? throughDay : nil
+        return .ready(range(baseline.map { month in month.reduce(0) { $0 + $1.amount(throughDay: cutoff) } }))
     }
 
     // MARK: - 分類與觀察
@@ -250,9 +363,14 @@ public enum Analysis {
     private static func categoryLines(expenses: [Txn], baseline: [[Txn]], book: CategoryBook) -> [CategoryLine] {
         // 找不到分類的算在「其他」，不能漏掉。
         Dictionary(grouping: expenses) { book.category(of: $0) }.map { category, items -> CategoryLine in
-            let past = baseline.map { month in month.filter { book.category(of: $0).id == category.id } }
+            // 大概的數字不知道花在哪，不拿來說這一類平常多少。
+            let past = baseline.map { month in
+                month.filter { $0.estimate == nil && book.category(of: $0).id == category.id }
+            }
+            let hasEstimate = items.contains { $0.estimate != nil }
             // 至少兩個月真的有這一類，才有「平常」可言。
-            let usual = past.filter { !$0.isEmpty }.count >= minBaselineMonths ? range(past.map { sum($0) }) : nil
+            let usual = !hasEstimate && past.filter { !$0.isEmpty }.count >= minBaselineMonths
+                ? range(past.map { sum($0) }) : nil
             return CategoryLine(
                 category: category, total: sum(items), oneOff: sum(items.filter(\.isOneOff)),
                 count: items.count, usual: usual
@@ -268,7 +386,9 @@ public enum Analysis {
         let candidates = lines.compactMap { line -> (SpendingNote, Int)? in
             guard let usual = line.usual else { return nil }
             let count = expenses.filter { book.category(of: $0).id == line.id && !$0.isOneOff }.count
-            let pastCount = baseline.reduce(0) { $0 + $1.filter { book.category(of: $0).id == line.id }.count }
+            let pastCount = baseline.reduce(0) { total, month in
+                total + month.filter { $0.estimate == nil && book.category(of: $0).id == line.id }.count
+            }
             guard count >= minRecords, pastCount >= minRecords else { return nil }
             let edge = line.routine > usual.high ? usual.high : usual.low
             let difference = abs(line.routine - edge)

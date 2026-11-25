@@ -8,12 +8,14 @@ public enum DemoData: String, CaseIterable, Sendable {
     case steady
     /// 中間空了一段才回來。
     case returning
+    /// 用了四個月，也設了固定支出。
+    case planned
 
     public func transactions(today: String, days: Days) -> [Txn] {
         switch self {
         case .fresh:
             return Self.fresh(today: today, days: days)
-        case .steady:
+        case .steady, .planned:
             return Self.history(today: today, days: days, skipping: nil)
         case .returning:
             return Self.history(today: today, days: days, skipping: 4...16)
@@ -21,9 +23,30 @@ public enum DemoData: String, CaseIterable, Sendable {
     }
 
     public func budgets(today: String, days: Days) -> [Budget] {
-        guard self == .steady else { return [] }
+        guard self == .steady || self == .planned else { return [] }
         let month = days.adding(months: -2, toMonthOf: today)
-        return [Budget(month: month, amount: 24000, createdAt: days.date(of: month) ?? Date())]
+        return [Budget(month: month, amount: self == .planned ? 36000 : 24000, createdAt: days.date(of: month) ?? Date())]
+    }
+
+    /// 一項這個月記過了、兩項還沒到、一項一年一次。
+    public func fixed(today: String, days: Days) -> [FixedExpense] {
+        guard self == .planned else { return [] }
+        let month = days.monthStart(of: today)
+        func item(_ name: String, _ amount: Int, _ note: String, _ schedule: FixedSchedule, order: Int) -> FixedExpense {
+            FixedExpense(
+                fields: FixedFields(
+                    amount: amount, categoryId: Categories.named(name).id, note: note, schedule: schedule
+                ),
+                startsOn: month,
+                createdAt: (days.date(of: month) ?? Date(timeIntervalSince1970: 0)).addingTimeInterval(Double(order))
+            )
+        }
+        return [
+            item("停車", 1500, "停車月租", .monthly(day: 3), order: 1),
+            item("運動", 1200, "健身房", .monthly(day: 28), order: 2),
+            item("居住", 699, "網路", .monthly(day: 30), order: 3),
+            item("保險", 12000, "車險", .yearly(month: 3, day: 15), order: 4),
+        ]
     }
 
     private static func make(
