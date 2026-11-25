@@ -71,3 +71,4 @@
 - 多米 2026-11-25 定：TestFlight 改手動簽章＋手動觸發。子代理在改 testflight.yml、ios/ci、project.yml、指南（分支 appstore-prep）。改完要推分支開 PR 讓 CI 驗 project.yml，再併 main。
 - main 的 CI 45476466019 紅：一個是模擬器逾時（infra），一個是編輯分類左滑偶爾擋不住（真的），已改成 sheet，在 appstore-prep 還沒推。等簽章那包好了一起開 PR。畫布 H 區的編輯／新增分類要改成 sheet 樣子。
 - PR #2（appstore-prep）CI 45483787949 全綠，21 個畫面測試，編輯分類彈出視窗的截圖看過。等多米說併不併。畫布正在同步（編輯／新增分類改 sheet、F2）。併完等六個 secret 放好，用 `gh workflow run testflight.yml --ref main` 出第一版。
+- 2026-11-25 PR #2 已併進 main（a801d91）。等多米放六個 secret、登記 App ID、建 app、回資料結構，再 `gh workflow run testflight.yml --ref main`。畫布第 9 版跟 main 一致。提交要指定檔名，不准 commit -a。
