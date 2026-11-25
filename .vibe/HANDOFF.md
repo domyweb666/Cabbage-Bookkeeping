@@ -1,6 +1,6 @@
-# Handoff: 固定支出、補大概的數字、小工具做完（spend-left，CI 綠），等多米建 App Group 與決定併不併
+# Handoff: PR #4 已併 main（056d03b），第一版 TestFlight 卡在 API 金鑰，等多米重放
 
-> 產出時間：2026-11-25 中午｜分支 spend-left（從 c8c07fc 開，沒開 PR）｜最後程式 commit 是「記一筆：點到露一半的分類格會捲進來」（已推）
+> 更新：2026-11-25 17:00｜分支 main
 > 舊的交接檔備份在 .vibe/handoff/archive/
 
 ## ✅ 這次完成了什麼
@@ -19,12 +19,13 @@
 
 ## 🚧 待決定（都要多米）
 
-- PR #4 已開（https://github.com/domyweb666/Cabbage-Bookkeeping/pull/4），Auto-fix 開著。多米 2026-11-25 說「併，出第一版」：CI 45567037332 綠了就 `gh pr merge 4 --merge`，再 `gh workflow run testflight.yml --ref main`。多米 2026-11-25 下午說後台建好了（沒有用 API 核對過）。多米 2026-11-25 說剩下兩個 secret 也放好了（憑證是 voicetype-signing 那張，AI 不讀不傳）；.p12 密碼對不對要等出版時 CI 檢查。原本寫的是：併之前多米要先在後台做上架指南步驟 4：建 App Group `group.org.domyweb.baicai`；登記 `org.domyweb.baicai` 和 `org.domyweb.baicai.widget`，都勾 App Groups 並 Configure 選那個群組。出第一版前一定要做完
+- 第一版 TestFlight：第一次（45571004952）停在「還原 API 金鑰並驗格式」，`ASC_KEY_P8_BASE64` 放的是原文、換行不見（253 bytes，正常約 257）。多米要自己重放（建議 E:\人篸修煉\AuthKey_F3286X6SY3.p8 轉 base64，`ASC_KEY_ID` 跟著改 F3286X6SY3；AI 不讀不傳金鑰）。多米 16:50 說「放好了」，但 `gh secret list` 顯示還是 07:17Z 那份，沒有更新，所以沒有再觸發。觸發前先看這個時間
+- 後面的憑證、描述檔、App ID／App Group 檢查、archive、上傳都還沒跑過
 - `docs/不能改的字串.md` 過目（準則 7-4：Bundle ID、App Group、widget kind `org.domyweb.baicai.widget.left`、control kind `org.domyweb.baicai.control.add`、網址 `baicai://entry`）
 - 準則 7-18 說鎖定畫面不放個人數值，這次照多米點的放了；鎖著時藏不藏要看真機與系統設定
 - 研究對照第六段：第一個畫面的主角（建議「看」）、成功的感覺（多米自己寫）、候選表、付款方式（建議不做）、真人情境。閘門 1 沒過，A B C 是多米點名先做
 - `.analytics/` 閘門 0、1、2；資料結構這次多了 fixed、estimate 兩欄，上 TestFlight 前確認
-- 還有上架指南最後的 12 項與六個 secret
+- 還有上架指南最後的 12 項
 
 ## 還沒驗證
 
@@ -45,8 +46,9 @@
 
 ## ⏭️ 下一步從哪繼續
 
-1. `git status`、`gh run list -w CI -b spend-left -L 2`，照工作包 M、O、Q 做
-2. 報告完等多米說併不併，併完出版用 `gh workflow run testflight.yml --ref main`
+1. `gh secret list` 看 `ASC_KEY_P8_BASE64` 時間晚於 2026-11-25T07:48Z，才 `gh workflow run testflight.yml --ref main`，看到上傳成功
+2. main 的 CI 45571001791 第一次紅在 testCategoriesInLargeText（點「常用分類」那一下模擬器沒吃到，程式跟 PR 綠的那份一樣），已重跑。再紅就當真的查
+3. 大字時設定頁 VeggieRow 的圖示（觸覺回饋、固定支出）比圖示欄寬，會貼到字，還沒改
 
 ## 🗑️ 雜訊
 
