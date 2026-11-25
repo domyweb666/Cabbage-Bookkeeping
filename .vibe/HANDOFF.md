@@ -14,7 +14,7 @@
 ## 🧩 剩下的工作（工作包）
 
 - [ ] M：看 CI 45546805188（紅就修，改完 push 再 `gh workflow run CI --ref spend-left`），看圖 29 的「早餐」整格看得到｜CI 綠｜EntrySheet.swift｜無
-- [ ] O：畫布 https://claude.ai/artifact/443tfNbnKAAcyP23k5uAw7 同步與 README（上個會話派了子代理在做，沒做完就重派；README、docs/SETUP.md 的改動還沒提交，先 git status 看）｜畫布跟程式一致｜README.md、docs/SETUP.md｜無
+- [x] O：畫布第 12 版已同步（改 33 張、新增 J 區 21 張；沒在畫布網頁上看過；沒畫：分析頁「一年一次…」那句、固定支出左滑刪除、新增選「每年」、新畫面的大字深色），README 已提交
 - [ ] Q：提交 README 與交接檔，向多米做收尾報告（內容看下面「待決定」）｜多米收到｜無｜M、O
 
 ## 🚧 待決定（都要多米）
