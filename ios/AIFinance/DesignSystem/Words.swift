@@ -43,6 +43,12 @@ enum Words {
     enum Ledger {
         static let monthTotal = "本月支出"
         static let add = "記一筆"
+
+        static func dayTotal(_ amount: Int) -> String { "共 \(Money.grouped(amount))" }
+        static func monthSpoken(total: Int, budget: String?) -> String {
+            [monthTotal + " " + Money.format(total), budget].compactMap { $0 }.joined(separator: "，")
+        }
+
         static let undo = "復原"
         static let emptyTitle = "還沒有紀錄"
         static let emptyMessage = "按下面的「記一筆」，選金額和分類就好。"
@@ -67,7 +73,11 @@ enum Words {
         static let delete = "刪除"
         static let deleteTitle = "刪除這筆紀錄？"
         static let deleteConfirm = "刪除這筆"
+        static let category = "分類"
+        static let pickCategory = "選分類"
         static let editCategories = "編輯"
+
+        static func picked(_ name: String) -> String { "分類，\(name)" }
         static let editCategoriesSpoken = "編輯常用分類"
     }
 

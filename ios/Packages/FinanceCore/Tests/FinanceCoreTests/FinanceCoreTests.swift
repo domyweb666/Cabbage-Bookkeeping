@@ -33,8 +33,8 @@ final class MoneyTests: XCTestCase {
         XCTAssertEqual(Money.grouped(1234), "1,234")
         XCTAssertEqual(Money.grouped(1234567), "1,234,567")
         XCTAssertEqual(Money.format(3240), "NT$3,240")
-        XCTAssertEqual(Money.signed(188, type: .expense), "-188")
-        XCTAssertEqual(Money.signed(52000, type: .income), "+52,000")
+        XCTAssertEqual(Money.listed(188, type: .expense), "188")
+        XCTAssertEqual(Money.listed(52000, type: .income), "+52,000")
     }
 
     func testAmountPad() {
@@ -79,6 +79,14 @@ final class DaysTests: XCTestCase {
         XCTAssertEqual(days.sectionTitle(for: "2026-11-14", today: "2026-11-15"), "昨天")
         XCTAssertEqual(days.sectionTitle(for: "2026-11-13", today: "2026-11-15"), "11 月 13 日 週五")
         XCTAssertEqual(days.sectionTitle(for: "2025-12-31", today: "2026-01-02"), "2025 年 12 月 31 日 週三")
+        let labels = [
+            days.sectionLabel(for: "2026-11-15", today: "2026-11-15"),
+            days.sectionLabel(for: "2026-11-14", today: "2026-11-15"),
+            days.sectionLabel(for: "2026-11-13", today: "2026-11-15"),
+            days.sectionLabel(for: "2025-12-31", today: "2026-01-02"),
+        ]
+        XCTAssertEqual(labels.map(\.title), ["今天", "昨天", "11/13", "2025/12/31"])
+        XCTAssertEqual(labels.map(\.detail), ["11/15 週日", "11/14 週六", "週五", "週三"])
         XCTAssertEqual(days.monthTitle(of: "2026-11-15"), "2026 年 11 月")
         XCTAssertEqual(Days.shortMonth(of: "2026-09-01"), "9 月")
     }
@@ -255,6 +263,8 @@ final class AnalysisTests: XCTestCase {
         XCTAssertNil(over.budget?.perDay)
         XCTAssertEqual(AnalysisText.budget(over.budget!), "預算 NT$20,000，多花了 NT$1,000。")
         XCTAssertEqual(AnalysisText.homeBudget(over.budget!), "預算 NT$20,000")
+        XCTAssertEqual(AnalysisText.homeBudgetLabel(over.budget!), "預算")
+        XCTAssertEqual(AnalysisText.homeBudgetAmount(over.budget!), 20000)
         XCTAssertNil(report([tx(1, "2026-10-01")], month: "2026-10", budgets: [budget]).budget, "訂之前的月份沒有預算")
     }
 

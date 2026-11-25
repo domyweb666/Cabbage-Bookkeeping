@@ -60,6 +60,17 @@ final class CategoriesTests: XCTestCase {
         }
     }
 
+    /// 分組改名的話顏色會默默變成 other，在這裡擋。
+    func testEachGroupHasItsTint() {
+        let expected: [String: CategoryTint] = [
+            "吃喝": .food, "交通": .transport, "住家": .home, "購物": .shopping, "玩樂": .shopping,
+            "身體": .other, "家人與人情": .other, "學習與工作": .other, "錢": .other,
+        ]
+        XCTAssertEqual(Set(Categories.groups(.expense).map(\.name)), Set(expected.keys))
+        for category in Categories.of(.expense) { XCTAssertEqual(category.tint, expected[category.group]) }
+        for category in Categories.of(.income) { XCTAssertEqual(category.tint, .income) }
+    }
+
     func testIconListHasNoDuplicates() {
         XCTAssertEqual(Set(Categories.icons).count, Categories.icons.count)
         XCTAssertTrue(Set(Categories.all.map(\.icon)).isSubset(of: Categories.icons))

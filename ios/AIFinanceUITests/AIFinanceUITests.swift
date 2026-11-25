@@ -73,6 +73,20 @@ final class AIFinanceUITests: XCTestCase {
         app.launchArguments.removeAll { $0 == "-wipeStore" }
     }
 
+    /// 記一筆的分類卡捲到底。三排以外的格子要捲才會出現。
+    private func scrollCategories() {
+        let start = app.buttons["category_居住"].coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+        start.press(forDuration: 0.05, thenDragTo: start.withOffset(CGVector(dx: 0, dy: -200)))
+    }
+
+    /// 排在後面的分類格，看不到就先捲。
+    private func lateCategory(_ name: String) -> XCUIElement {
+        let cell = app.buttons["category_\(name)"]
+        XCTAssertTrue(app.buttons["category_居住"].waitForExistence(timeout: 30))
+        if !(cell.waitForExistence(timeout: 3) && cell.isHittable) { scrollCategories() }
+        return cell
+    }
+
     private func openCategoriesFromEntry() {
         scrollTo(app.buttons["editCategories"])
         app.buttons["editCategories"].tap()
@@ -336,7 +350,7 @@ final class AIFinanceUITests: XCTestCase {
         app.buttons["pick_早餐"].tap()
         app.buttons["categoriesDone"].tap()
 
-        XCTAssertTrue(app.buttons["category_早餐"].waitForExistence(timeout: 10), "勾了就要出現在格子")
+        XCTAssertTrue(lateCategory("早餐").waitForExistence(timeout: 10), "勾了就要出現在格子")
         XCTAssertTrue(wait("entryAmount", contains: "88"), "按過的金額要還在")
         app.buttons["category_早餐"].tap()
         shot("29-記一筆-多一格")
@@ -344,21 +358,22 @@ final class AIFinanceUITests: XCTestCase {
         XCTAssertTrue(row("早餐", "NT$88").waitForExistence(timeout: 30))
 
         openEntry()
-        app.buttons["category_早餐"].tap()
+        lateCategory("早餐").tap()
         press("5")
         XCTAssertTrue(app.buttons["entrySave"].isEnabled)
         openCategoriesFromEntry()
         scrollTo(app.buttons["pick_早餐"])
         app.buttons["pick_早餐"].tap()
         app.buttons["categoriesDone"].tap()
-        XCTAssertTrue(app.buttons["category_飲食"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["category_居住"].waitForExistence(timeout: 10))
+        scrollCategories()
         XCTAssertFalse(app.buttons["category_早餐"].exists, "取消勾選後格子就沒有")
         XCTAssertFalse(app.buttons["entrySave"].isEnabled, "選好的分類不顯示了，就當作還沒選")
         app.buttons["entryCancel"].tap()
 
         XCTAssertTrue(row("早餐", "NT$88").waitForExistence(timeout: 10), "記過的不受影響")
         row("早餐", "NT$88").tap()
-        XCTAssertTrue(app.buttons["category_早餐"].waitForExistence(timeout: 30), "改舊紀錄要看得到原本的分類")
+        XCTAssertTrue(lateCategory("早餐").waitForExistence(timeout: 30), "改舊紀錄要看得到原本的分類")
         XCTAssertTrue(app.buttons["category_早餐"].isSelected)
     }
 
@@ -383,7 +398,7 @@ final class AIFinanceUITests: XCTestCase {
         XCTAssertTrue(app.buttons["categoriesDone"].waitForExistence(timeout: 10))
         app.buttons["categoriesDone"].tap()
 
-        XCTAssertTrue(app.buttons["category_貓咪"].waitForExistence(timeout: 10))
+        XCTAssertTrue(lateCategory("貓咪").waitForExistence(timeout: 10))
         press("1", "2", "0")
         app.buttons["category_貓咪"].tap()
         app.buttons["entrySave"].tap()
@@ -393,7 +408,7 @@ final class AIFinanceUITests: XCTestCase {
         app.launch()
         XCTAssertTrue(row("貓咪", "NT$120").waitForExistence(timeout: 30), "重開之後紀錄和名字都要還在")
         openEntry()
-        XCTAssertTrue(app.buttons["category_貓咪"].waitForExistence(timeout: 10), "重開之後分類要還在")
+        XCTAssertTrue(lateCategory("貓咪").waitForExistence(timeout: 10), "重開之後分類要還在")
         app.buttons["entryCancel"].tap()
 
         openCategoriesFromSettings()
@@ -407,6 +422,7 @@ final class AIFinanceUITests: XCTestCase {
         app.tabBars.buttons["記帳"].tap()
         XCTAssertTrue(row("貓咪", "NT$120").waitForExistence(timeout: 10), "刪掉分類，記過的照樣看得到名字")
         openEntry()
+        scrollCategories()
         XCTAssertFalse(app.buttons["category_貓咪"].exists)
     }
 
@@ -459,7 +475,8 @@ final class AIFinanceUITests: XCTestCase {
         app.buttons["categoryCancel"].tap()
         XCTAssertTrue(app.buttons["categoriesDone"].waitForExistence(timeout: 10))
         app.buttons["categoriesDone"].tap()
-        XCTAssertTrue(app.buttons["category_飲食"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["category_居住"].waitForExistence(timeout: 10))
+        scrollCategories()
         XCTAssertFalse(app.buttons["category_貓咪"].exists, "取消就不會新增")
     }
 

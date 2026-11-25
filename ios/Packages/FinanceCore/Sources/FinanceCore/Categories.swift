@@ -15,6 +15,24 @@ public struct TxCategory: Identifiable, Hashable, Sendable {
     var isStandard: Bool { number.map { Categories.standardNumbers.contains($0) } ?? false }
 }
 
+/// 分類色塊的顏色，照大組分。使用者自己新增的、舊紀錄對不到分組的都算 other。
+public enum CategoryTint: CaseIterable, Sendable {
+    case food, transport, home, shopping, other, income
+}
+
+extension TxCategory {
+    public var tint: CategoryTint {
+        if kind == .income { return .income }
+        switch group {
+        case "吃喝": return .food
+        case "交通": return .transport
+        case "住家": return .home
+        case "購物", "玩樂": return .shopping
+        default: return .other
+        }
+    }
+}
+
 /// 常用分類畫面上的一組。
 public struct CategoryGroup: Identifiable, Hashable, Sendable {
     public let name: String

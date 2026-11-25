@@ -153,6 +153,15 @@ public enum AnalysisText {
 
     /// F2 首頁本月支出下面的小字。多花的時候不在首頁說，改顯示預算金額。
     public static func homeBudget(_ status: BudgetStatus) -> String {
-        status.left >= 0 ? "還能花 \(Money.format(status.left))" : "預算 \(Money.format(status.budget))"
+        "\(homeBudgetLabel(status)) \(Money.format(homeBudgetAmount(status)))"
+    }
+
+    /// 記帳頁把標籤和數字分開排。超過預算時不講超過，改顯示預算。
+    public static func homeBudgetLabel(_ status: BudgetStatus) -> String {
+        status.left >= 0 ? "還能花" : "預算"
+    }
+
+    public static func homeBudgetAmount(_ status: BudgetStatus) -> Int {
+        status.left >= 0 ? status.left : status.budget
     }
 }
