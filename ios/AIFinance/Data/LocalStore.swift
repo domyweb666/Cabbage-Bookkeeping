@@ -27,6 +27,17 @@ final class StoredBudget {
     }
 }
 
+@Model
+final class StoredFixed {
+    @Attribute(.unique) var id: UUID
+    var payload: Data
+
+    init(id: UUID, payload: Data) {
+        self.id = id
+        self.payload = payload
+    }
+}
+
 /// 分類的設定整份存一列：改過的名字、自己新增的、顯示哪些、順序。
 @Model
 final class StoredCategoryBook {
@@ -48,8 +59,11 @@ final class LocalStore {
     private let decoder = JSONDecoder()
 
     init(inMemory: Bool) throws {
-        let config = ModelConfiguration("Baicai", isStoredInMemoryOnly: inMemory)
-        container = try ModelContainer(for: StoredTxn.self, StoredBudget.self, StoredCategoryBook.self, configurations: config)
+        // 有了 App Group，SwiftData 預設會改放到共用的資料夾。資料庫留在 App 自己這邊，小工具另外給一份快照。
+        let config = ModelConfiguration("Baicai", isStoredInMemoryOnly: inMemory, groupContainer: .none)
+        container = try ModelContainer(
+            for: StoredTxn.self, StoredBudget.self, StoredCategoryBook.self, StoredFixed.self, configurations: config
+        )
         context = ModelContext(container)
         context.autosaveEnabled = false
     }
@@ -60,6 +74,12 @@ final class LocalStore {
 
     func budgets() throws -> [Budget] {
         try context.fetch(FetchDescriptor<StoredBudget>()).map { try decoder.decode(Budget.self, from: $0.payload) }
+    }
+
+    func fixedExpenses() throws -> [FixedExpense] {
+        try context.fetch(FetchDescriptor<StoredFixed>())
+            .map { try decoder.decode(FixedExpense.self, from: $0.payload) }
+            .sorted { $0.createdAt < $1.createdAt }
     }
 
     /// 沒存過就是預設的樣子。
@@ -93,11 +113,25 @@ final class LocalStore {
         try commit()
     }
 
+    func save(_ item: FixedExpense) throws {
+        let payload = try encoder.encode(item)
+        let id = item.id
+        var query = FetchDescriptor<StoredFixed>(predicate: #Predicate<StoredFixed> { $0.id == id })
+        query.fetchLimit = 1
+        if let row = try context.fetch(query).first {
+            row.payload = payload
+        } else {
+            context.insert(StoredFixed(id: id, payload: payload))
+        }
+        try commit()
+    }
+
     func wipe() throws {
         do {
             try context.fetch(FetchDescriptor<StoredTxn>()).forEach { context.delete($0) }
             try context.fetch(FetchDescriptor<StoredBudget>()).forEach { context.delete($0) }
             try context.fetch(FetchDescriptor<StoredCategoryBook>()).forEach { context.delete($0) }
+            try context.fetch(FetchDescriptor<StoredFixed>()).forEach { context.delete($0) }
         } catch {
             context.rollback()
             throw error

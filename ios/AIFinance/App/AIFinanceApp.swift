@@ -1,5 +1,6 @@
 import FinanceCore
 import SwiftUI
+import UIKit
 import VeggieKit
 
 @main
@@ -18,6 +19,7 @@ struct AIFinanceApp: App {
             let today = config.today ?? days.day(of: Date())
             try? store.save(demo.transactions(today: today, days: days))
             demo.budgets(today: today, days: days).forEach { try? store.save($0) }
+            demo.fixed(today: today, days: days).forEach { try? store.save($0) }
         }
         // 畫面測試互不影響：設定從頭開始，要的話連手機上的資料庫也清掉。
         if config.inMemory { Preferences.forget() }
@@ -29,7 +31,14 @@ struct AIFinanceApp: App {
         WindowGroup {
             Group {
                 if let model {
-                    RootView().environment(model)
+                    RootView()
+                        .environment(model)
+                        .onOpenURL { url in
+                            // 小工具按下去的網址。認得這一個，其他不理。
+                            if url.scheme == Shared.scheme, url.host() == Shared.entryHost {
+                                EntryRequest.shared.ask()
+                            }
+                        }
                 } else {
                     EmptyMessage(title: Words.Failure.storeTitle, message: Words.Failure.storeMessage)
                         .background(Theme.background.ignoresSafeArea())
@@ -50,17 +59,49 @@ private struct RootView: View {
     @Environment(LedgerModel.self) private var model
     @Environment(\.scenePhase) private var scenePhase
 
+    private enum Page: Hashable {
+        case ledger
+        case analysis
+        case settings
+    }
+
+    @State private var page: Page = .ledger
+
     var body: some View {
-        TabView {
+        TabView(selection: $page) {
             LedgerView()
                 .tabItem { Label(Words.Tab.ledger, systemImage: "list.bullet") }
+                .tag(Page.ledger)
             AnalysisView()
                 .tabItem { Label(Words.Tab.analysis, systemImage: "chart.bar.fill") }
+                .tag(Page.analysis)
             SettingsView()
                 .tabItem { Label(Words.Tab.settings, systemImage: "gearshape.fill") }
+                .tag(Page.settings)
+        }
+        .onAppear(perform: openEntryIfAsked)
+        .onChange(of: EntryRequest.shared.asked) { _, asked in
+            if asked { openEntryIfAsked() }
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { model.refreshToday() }
         }
+    }
+
+    /// 小工具或控制中心要求記一筆。已經有別的畫面開著就不打斷，免得填到一半的不見。
+    private func openEntryIfAsked() {
+        let request = EntryRequest.shared
+        guard request.asked else { return }
+        request.asked = false
+        guard !hasPresentedScreen else { return }
+        page = .ledger
+        request.pending = true
+    }
+
+    private var hasPresentedScreen: Bool {
+        UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap(\.windows)
+            .contains { $0.rootViewController?.presentedViewController != nil }
     }
 }

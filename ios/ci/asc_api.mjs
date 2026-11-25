@@ -5,8 +5,12 @@ import { createPrivateKey, sign } from "node:crypto";
 import { readFileSync } from "node:fs";
 
 export const BUNDLE_ID = "org.domyweb.baicai";
-// 跟 project.yml 的 PROVISIONING_PROFILE_SPECIFIER、ExportOptions.plist 要一字不差
-export const PROFILE_NAME = "Baicai CI App Store";
+export const APP_GROUP = "group.org.domyweb.baicai";
+// 要簽章的兩個 target。描述檔名跟 project.yml 的 PROVISIONING_PROFILE_SPECIFIER、ExportOptions.plist 要一字不差
+export const TARGETS = [
+  { bundleId: BUNDLE_ID, profileName: "Baicai CI App Store" },
+  { bundleId: `${BUNDLE_ID}.widget`, profileName: "Baicai Widget CI App Store" },
+];
 
 const API = "https://api.appstoreconnect.apple.com";
 const base64url = (input) => Buffer.from(input).toString("base64url");
@@ -64,6 +68,33 @@ export function ascClient() {
     }
     return text ? JSON.parse(text) : null;
   };
+}
+
+/// 找 App ID，並看 App Group 開了沒。缺的會把名字相近的列出來，多半是登記時打錯一個字。
+export async function findBundleId(call, identifier) {
+  // filter[identifier] 是開頭比對，所以再比一次全名
+  const found = await call(
+    "GET",
+    `/v1/bundleIds?filter[identifier]=${encodeURIComponent(identifier)}&limit=200`,
+  );
+  const bundleId = found.data.find((item) => item.attributes.identifier === identifier);
+  if (!bundleId) {
+    // 紀錄是公開的，別的 app 不列，列開頭一樣的就好
+    const near = await call("GET", "/v1/bundleIds?filter[identifier]=org.domyweb.bai&limit=200");
+    const listed = near.data.map((item) => item.attributes.identifier).join("、");
+    throw new Error(
+      `Apple 後台沒有 App ID ${identifier}。先做 docs/上架指南.md 步驟 4。` +
+        `名字相近的有：${listed || "一個都沒有"}。`,
+    );
+  }
+  const capabilities = await call("GET", `/v1/bundleIds/${bundleId.id}/bundleIdCapabilities`);
+  if (!capabilities.data.some((item) => item.attributes.capabilityType === "APP_GROUPS")) {
+    throw new Error(
+      `App ID ${identifier} 還沒勾 App Groups。到 developer.apple.com → Identifiers → 點它 → 勾 App Groups → ` +
+        `Configure 選 ${APP_GROUP} → Save。`,
+    );
+  }
+  return bundleId;
 }
 
 function appleReason(text) {

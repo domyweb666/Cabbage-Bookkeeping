@@ -42,7 +42,8 @@ public struct TxnFields: Hashable, Sendable {
 
 /// 一筆紀錄。金額是正整數（新台幣元），日期是使用者選的 yyyy-MM-dd。
 public struct Txn: Codable, Identifiable, Hashable, Sendable {
-    public static let currentSchema = 1
+    /// 2：多了 fixed 和 estimate。
+    public static let currentSchema = 2
 
     public let id: UUID
     public private(set) var type: TxType
@@ -57,9 +58,16 @@ public struct Txn: Codable, Identifiable, Hashable, Sendable {
     public let timeZone: String
     public var deletedAt: Date?
     public private(set) var revisions: [TxnRevision]
+    /// 哪一項固定支出自動記的。手動記的是 nil。
+    public let fixed: FixedOrigin?
+    /// 補的是哪幾天的大概。照實記的是 nil。
+    public private(set) var estimate: DayRange?
     public let schemaVersion: Int
 
-    public init(id: UUID = UUID(), fields: TxnFields, createdAt: Date, timeZone: String) {
+    public init(
+        id: UUID = UUID(), fields: TxnFields, createdAt: Date, timeZone: String,
+        fixed: FixedOrigin? = nil, estimate: DayRange? = nil
+    ) {
         self.id = id
         self.type = fields.type
         self.amount = fields.amount
@@ -71,6 +79,8 @@ public struct Txn: Codable, Identifiable, Hashable, Sendable {
         self.timeZone = timeZone
         self.deletedAt = nil
         self.revisions = []
+        self.fixed = fixed
+        self.estimate = fields.type == .expense ? estimate : nil
         self.schemaVersion = Self.currentSchema
     }
 
@@ -98,7 +108,19 @@ public struct Txn: Codable, Identifiable, Hashable, Sendable {
         copy.categoryId = new.categoryId
         copy.note = new.note
         copy.isOneOff = oneOff
+        // 改成收入，或日期搬到那幾天以外，就不再是那幾天的大概。
+        if new.type != .expense || estimate?.contains(new.occurredOn) == false { copy.estimate = nil }
         return copy
+    }
+
+    /// 這個月算到第幾天為止的金額。大概的數字照天數分。nil 代表算整個月。
+    func amount(throughDay cutoff: Int?) -> Int {
+        guard let cutoff, let estimate else { return amount }
+        let from = Days.number(of: estimate.from)
+        let to = Days.number(of: estimate.to)
+        if to <= cutoff { return amount }
+        if from > cutoff { return 0 }
+        return amount * (cutoff - from + 1) / (to - from + 1)
     }
 }
 

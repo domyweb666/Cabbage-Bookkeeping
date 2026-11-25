@@ -2,7 +2,7 @@ import Foundation
 
 /// 匯出 CSV。開頭帶 BOM，Excel 直接開不會亂碼。
 public enum CSVExport {
-    public static let header = ["日期", "類型", "金額", "分類", "備註", "一次性", "記錄時間", "時區", "編號"]
+    public static let header = ["日期", "類型", "金額", "分類", "備註", "一次性", "記錄時間", "時區", "編號", "來源"]
 
     public static func field(_ value: String) -> String {
         let needsQuote = value.contains(",") || value.contains("\"") || value.contains("\n") || value.contains("\r")
@@ -28,6 +28,7 @@ public enum CSVExport {
                     formatter.string(from: t.createdAt),
                     t.timeZone,
                     t.id.uuidString,
+                    AnalysisText.source(of: t) ?? "",
                 ]
                 return columns.map(field).joined(separator: ",")
             }

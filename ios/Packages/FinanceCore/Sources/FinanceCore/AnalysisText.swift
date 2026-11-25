@@ -33,8 +33,9 @@ public enum AnalysisText {
             return "還沒有支出紀錄。"
         case .tooEarly:
             return "月初先不比，\(Analysis.compareFromDay) 號開始跟平常比。"
-        case .gap(let days):
-            return "中間有 \(days) 天沒有紀錄，先不跟平常比。"
+        case .gap:
+            // 不講斷了幾天。
+            return "中間有幾天沒記，先不跟平常比。"
         case .notEnough(let needed):
             return "再有 \(needed) 個記完整的月份，就能跟平常比。"
         case .ready(let range):
@@ -60,10 +61,31 @@ public enum AnalysisText {
         if let perDay = status.perDay {
             return "預算還剩 \(Money.format(status.left))，每天 \(Money.format(perDay))。"
         }
+        if status.spent > status.budget {
+            return "預算 \(Money.format(status.budget))，多花了 \(Money.format(status.spent - status.budget))。"
+        }
         if status.left < 0 {
-            return "預算 \(Money.format(status.budget))，多花了 \(Money.format(-status.left))。"
+            return "預算 \(Money.format(status.budget))，固定支出還差 \(Money.format(-status.left))。"
         }
         return "預算 \(Money.format(status.budget))，剩 \(Money.format(status.left))。"
+    }
+
+    /// A6 還能花裡面先扣掉的。
+    public static func reserved(_ status: BudgetStatus) -> String? {
+        status.reserved > 0 ? "已經先留 \(Money.format(status.reserved)) 給固定支出。" : nil
+    }
+
+    /// A7 每年一次的那筆記了，總數跟預算對不起來時說明。
+    public static func yearlyPaid(_ status: BudgetStatus) -> String? {
+        status.yearlyPaid > 0 ? "其中一年一次的 \(Money.format(status.yearlyPaid))，預算分 12 個月算。" : nil
+    }
+
+    /// A8 補一個大概的數字。
+    public static let estimateLink = "補一個大概的數字"
+
+    /// A9
+    public static func estimateTitle(_ range: DayRange) -> String {
+        "\(Days.slash(range.from)) 到 \(Days.slash(range.to)) 大概花了多少"
     }
 
     /// A5 訂預算畫面上的一行。
@@ -149,6 +171,41 @@ public enum AnalysisText {
         category.kind == .expense
             ? "記好了。\(category.name)這個月共 \(Money.format(monthTotal))"
             : "記好了。\(category.name) \(Money.format(amount))"
+    }
+
+    /// F3 自動記好固定支出之後。
+    public static func posted(_ rows: [(title: String, amount: Int)]) -> String? {
+        guard let first = rows.first else { return nil }
+        if rows.count == 1 { return "記好了。\(first.title) \(Money.format(first.amount))" }
+        return "記好了 \(rows.count) 筆固定支出，共 \(Money.format(rows.reduce(0) { $0 + $1.amount }))"
+    }
+
+    /// F4 明細上的小字：這一筆怎麼來的。手動照實記的沒有。
+    public static func source(of row: Txn) -> String? {
+        if let fixed = row.fixed { return fixed.isYearly ? "每年固定" : "每月固定" }
+        return row.estimate == nil ? nil : "大概"
+    }
+
+    // MARK: - 固定支出（G）
+
+    /// G1
+    public static func schedule(_ schedule: FixedSchedule) -> String {
+        switch schedule {
+        case .monthly(let day): return "每月 \(day) 號"
+        case .yearly(let month, let day): return "每年 \(month) 月 \(day) 日"
+        }
+    }
+
+    /// G2 每年一次的，每個月先留多少。
+    public static func share(_ amount: Int) -> String {
+        "每個月先留 \(Money.format(FixedExpense.share(of: amount)))"
+    }
+
+    /// G3 下一次記在哪天。
+    public static func nextDue(_ day: String) -> String {
+        let parts = day.split(separator: "-").compactMap { Int($0) }
+        guard parts.count == 3 else { return "" }
+        return "下一次記在 \(parts[0]) 年 \(parts[1]) 月 \(parts[2]) 日。"
     }
 
     /// F2 首頁本月支出下面的小字。多花的時候不在首頁說，改顯示預算金額。

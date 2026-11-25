@@ -73,11 +73,25 @@ jobs:
           xcrun simctl boot "$UDID" || true
           xcrun simctl bootstatus "$UDID" -b
 
+      # 用本機臨時簽章（不用憑證、不碰 secret），entitlements 才會包進去，小工具才讀得到 App Group（準則 2-30）。
       - name: 建置並跑畫面測試
         run: |
           set -o pipefail
           cd ios
-          xcodebuild test             -project AIFinance.xcodeproj -scheme AIFinance             -destination "id=${{ steps.sim.outputs.udid }}"             -resultBundlePath build/ui.xcresult             -derivedDataPath build/DerivedData             2>&1 | tee build.log | grep -E "error:|warning: unre|Test Case|Test Suite|\*\* |Testing failed|failed|passed" | grep -v "^$" | tail -150
+          xcodebuild test             -project AIFinance.xcodeproj -scheme AIFinance             -destination "id=${{ steps.sim.outputs.udid }}"             -resultBundlePath build/ui.xcresult             -derivedDataPath build/DerivedData             CODE_SIGN_IDENTITY=- CODE_SIGNING_REQUIRED=NO             2>&1 | tee build.log | grep -E "error:|warning: unre|Test Case|Test Suite|\*\* |Testing failed|failed|passed" | grep -v "^$" | tail -150
+
+      - name: 小工具有包進 App
+        if: always()
+        run: |
+          APP=ios/build/DerivedData/Build/Products/Debug-iphonesimulator/AIFinance.app
+          test -d "$APP/PlugIns/BaicaiWidget.appex"
+          /usr/libexec/PlistBuddy -c "Print :NSExtension" "$APP/PlugIns/BaicaiWidget.appex/Info.plist"
+          # 模擬器版的 entitlements 放在執行檔裡，兩邊都要有同一個群組。
+          for bin in "$APP/AIFinance" "$APP/PlugIns/BaicaiWidget.appex/BaicaiWidget"; do
+            if ! LC_ALL=C grep -aq "group.org.domyweb.baicai" "$bin" "$bin".debug.dylib 2>/dev/null; then
+              echo "::warning::$bin 裡找不到 App Group"
+            fi
+          done
 
       - name: 匯出截圖
         if: always()

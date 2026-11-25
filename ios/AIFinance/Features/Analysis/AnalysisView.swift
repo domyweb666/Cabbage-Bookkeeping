@@ -11,6 +11,7 @@ struct AnalysisView: View {
     @State private var path: [CategoryPick] = []
     @State private var showBudget = false
     @State private var editing: Txn?
+    @State private var estimating: EstimateTarget?
     @State private var showAllCategories = false
 
     /// 月初幾天把上個月的回顧放在最上面。
@@ -43,6 +44,7 @@ struct AnalysisView: View {
             }
             .navigationDestination(for: CategoryPick.self) { CategoryDetailView(pick: $0) }
             .sheet(isPresented: $showBudget) { BudgetSheet() }
+            .sheet(item: $estimating) { EstimateSheet(range: $0.range) }
             .sheet(item: $editing) { EntrySheet(mode: .edit($0)) }
         }
         .onAppear { model.refreshToday() }
@@ -136,6 +138,12 @@ struct AnalysisView: View {
                     .accessibilityIdentifier("analysisTotal")
             }
             answer(AnalysisText.comparison(report), id: "comparisonText")
+            if let gap = report.gapToFill {
+                Button(AnalysisText.estimateLink) { estimating = EstimateTarget(range: gap) }
+                    .font(Typo.subheadline.font.weight(.semibold))
+                    .frame(minHeight: Metric.touch)
+                    .accessibilityIdentifier("estimateButton")
+            }
             if let usual = report.comparison.range {
                 CompareBar(value: report.routine, extra: report.oneOff, usual: usual,
                            scale: max(report.expense, usual.high))
@@ -150,6 +158,15 @@ struct AnalysisView: View {
 
             Divider()
 
+            budgetPart(report)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .card()
+    }
+
+    /// 預算那一句，下面說明先扣掉了什麼。
+    private func budgetPart(_ report: MonthReport) -> some View {
+        VStack(alignment: .leading, spacing: Gap.tight) {
             if report.isCurrent {
                 Button {
                     showBudget = true
@@ -170,9 +187,13 @@ struct AnalysisView: View {
             } else {
                 small(report.budget.map(AnalysisText.budget) ?? Words.Analysis.noBudget)
             }
+            if let text = report.budget.flatMap(AnalysisText.reserved) {
+                small(text).accessibilityIdentifier("reservedText")
+            }
+            if let text = report.budget.flatMap(AnalysisText.yearlyPaid) {
+                small(text).accessibilityIdentifier("yearlyPaidText")
+            }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .card()
     }
 
     // MARK: - 花在哪一類

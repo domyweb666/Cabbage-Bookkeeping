@@ -62,15 +62,20 @@ struct EntrySheet: View {
                 amount
                 categoryHeader
                 ScrollViewReader { proxy in
-                    ScrollView {
-                        VStack(spacing: Gap.section) {
-                            categoryGrid
-                            // 字放到很大時位置不夠，日期和備註跟著一起捲。
-                            if typeSize.isAccessibilitySize { details }
-                        }
-                        .padding(.horizontal, Gap.screenMargin)
-                        .padding(.bottom, Gap.item)
-                        .id(Self.contentID)
+                    ScrollView { scrolled }
+                    // 平常字級：白卡固定，格子在卡片裡捲。大字：卡片跟著日期、備註一起捲。
+                    .background(isLarge ? Color.clear : Theme.card)
+                    .clipShape(RoundedRectangle(cornerRadius: isLarge ? 0 : Theme.cardRadius, style: .continuous))
+                    .padding(.horizontal, isLarge ? 0 : Gap.screenMargin)
+                    // 打開就看得到選好的那一格。
+                    .onChange(of: opened) { _, form in
+                        guard let id = form?.categoryId else { return }
+                        Task { proxy.scrollTo(id) }
+                    }
+                    // 點到露一半的格子，捲到看得到整格。
+                    .onChange(of: categoryId) { _, id in
+                        guard let id, !isLarge else { return }
+                        withAnimation(Motion.change) { proxy.scrollTo(id) }
                     }
                     .scrollDismissesKeyboard(.interactively)
                     // 分類超過一個畫面時閃一下捲軸，看得出下面還有。
@@ -133,6 +138,25 @@ struct EntrySheet: View {
         }
     }
 
+    private var isLarge: Bool { typeSize.isAccessibilitySize }
+
+    @ViewBuilder
+    private var scrolled: some View {
+        if isLarge {
+            VStack(spacing: Gap.section) {
+                categoryGrid
+                    .background(Theme.card, in: RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous))
+                // 字放到很大時位置不夠，日期和備註跟著一起捲。
+                details
+            }
+            .padding(.horizontal, Gap.screenMargin)
+            .padding(.bottom, Gap.item)
+            .id(Self.contentID)
+        } else {
+            categoryGrid.id(Self.contentID)
+        }
+    }
+
     @ToolbarContentBuilder
     private var toolbar: some ToolbarContent {
         ToolbarItem(placement: .cancellationAction) {
@@ -151,6 +175,7 @@ struct EntrySheet: View {
                 Button(Words.done) { noteFocused = false }
             } else if original != nil {
                 Button(Words.Entry.delete, role: .destructive) { confirmDelete = true }
+                    .tint(Theme.destructive)
                     .accessibilityIdentifier("entryDelete")
             }
         }
@@ -210,7 +235,7 @@ struct EntrySheet: View {
     }
 
     private var categoryGrid: some View {
-        LazyVGrid(columns: columns, spacing: Gap.tight) {
+        LazyVGrid(columns: columns, spacing: isLarge ? Gap.group : Gap.tight) {
             ForEach(model.book.choices(type, keeping: original?.categoryId)) { category in
                 CategoryCell(category: category, isSelected: category.id == categoryId) {
                     if categoryId != category.id { Haptics.selected() }
@@ -222,7 +247,6 @@ struct EntrySheet: View {
             }
         }
         .padding(Gap.item)
-        .background(Theme.card, in: RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous))
     }
 
     private var details: some View {
@@ -234,13 +258,18 @@ struct EntrySheet: View {
                     Spacer(minLength: 0)
                     oneOffButton
                 }
+                // 收入沒有「一次性」，高度也不變，日期才不會跳。
+                .frame(minHeight: Metric.touch)
                 VStack(alignment: .leading, spacing: Gap.group) {
                     datePicker
                     oneOffButton
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
-            TextField(Words.Entry.note, text: $note)
+            TextField(
+                Words.Entry.note, text: $note,
+                prompt: Text(Words.Entry.note).foregroundStyle(Theme.secondaryText)
+            )
                 .focused($noteFocused)
                 .submitLabel(.done)
                 .onSubmit { noteFocused = false }
@@ -326,7 +355,8 @@ private struct PickedCategory: View {
     }
 }
 
-private struct CategoryCell: View {
+/// 分類格。記一筆和固定支出共用。
+struct CategoryCell: View {
     let category: TxCategory
     let isSelected: Bool
     let onTap: () -> Void

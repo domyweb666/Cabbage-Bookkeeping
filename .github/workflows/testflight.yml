@@ -90,7 +90,7 @@ jobs:
           APPLE_DIST_P12_PASSWORD: ${{ secrets.APPLE_DIST_P12_PASSWORD }}
         run: bash ios/ci/import_dist_cert.sh
 
-      - name: 問 Apple 金鑰、app 記錄、build 號
+      - name: 問 Apple 金鑰、App ID、app 記錄、build 號
         env:
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
@@ -102,7 +102,7 @@ jobs:
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
         run: node ios/ci/appstore_profile.mjs
 
-      # 指令列只帶 Team 和 build 號。簽章方式與描述檔寫在 project.yml 的 app target，
+      # 指令列只帶 Team 和 build 號。簽章方式與描述檔寫在 project.yml 的 app 和小工具 target，
       # 不可以搬到這裡：指令列的設定會套到 FinanceCore、VeggieKit，套件不吃描述檔，會整個失敗。
       - name: archive
         env:

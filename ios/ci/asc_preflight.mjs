@@ -1,11 +1,13 @@
-// 打包前先問 Apple：金鑰能不能用、app 記錄建了沒、這個 build 號有沒有用過。只讀不寫。
+// 打包前先問 Apple：金鑰能不能用、兩個 App ID 和 App Group 好了沒、app 記錄建了沒、這個 build 號有沒有用過。只讀不寫。
 // 環境變數：ASC_KEY_ID、ASC_ISSUER_ID、ASC_KEY_P8_PATH、BUILD_NUMBER
-import { ascClient, BUNDLE_ID, reportFailure, requireEnv } from "./asc_api.mjs";
+import { ascClient, BUNDLE_ID, findBundleId, reportFailure, requireEnv, TARGETS } from "./asc_api.mjs";
 
 try {
   const [buildNumber] = requireEnv("BUILD_NUMBER");
   if (!/^[1-9][0-9]*$/.test(buildNumber)) throw new Error("BUILD_NUMBER 要是正整數");
   const call = ascClient();
+
+  for (const target of TARGETS) await findBundleId(call, target.bundleId);
 
   const apps = await call(
     "GET",
@@ -33,7 +35,7 @@ try {
     );
   }
   console.log(
-    `金鑰可用，app 記錄在。Apple 那邊最大的 build 是 ${highest}，這次是 ${buildNumber}。`,
+    `金鑰可用，兩個 App ID 都開了 App Groups，app 記錄在。Apple 那邊最大的 build 是 ${highest}，這次是 ${buildNumber}。`,
   );
 } catch (error) {
   reportFailure(error);

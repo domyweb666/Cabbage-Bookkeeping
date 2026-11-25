@@ -50,6 +50,11 @@ struct CategoryEditView: View {
         problem == .empty && target.category == nil ? nil : problem
     }
 
+    /// 選中的圖示用這個分類的色塊顏色，跟記一筆的格子一樣。
+    private var tint: CategoryTint {
+        target.category?.tint ?? (target.kind == .income ? .income : .other)
+    }
+
     private var isCustom: Bool { categoryID.map { model.book.isCustom($0) } ?? false }
 
     private var isLastShown: Bool {
@@ -111,6 +116,11 @@ struct CategoryEditView: View {
                     .font(Typo.footnote.font)
                     .foregroundStyle(Theme.destructive)
                     .accessibilityIdentifier("categoryNameProblem")
+            } else if target.kind == .expense, name.contains(Words.CategoryEdit.cardBill) {
+                Text(Words.CategoryEdit.cardBillHint)
+                    .font(Typo.footnote.font)
+                    .foregroundStyle(Theme.secondaryText)
+                    .accessibilityIdentifier("cardBillHint")
             }
         }
     }
@@ -139,10 +149,13 @@ struct CategoryEditView: View {
                     } label: {
                         Image(systemName: symbol)
                             .font(Typo.body.font)
-                            .foregroundStyle(icon == symbol ? Theme.onAccent : Theme.primaryText)
+                            .foregroundStyle(icon == symbol ? Theme.onTint : Theme.primaryText)
                             .dynamicTypeSize(...DynamicTypeSize.xxLarge)
                             .frame(width: Metric.touch, height: Metric.touch)
-                            .background(icon == symbol ? Theme.accent : Theme.background, in: Circle())
+                            .background(
+                                icon == symbol ? Theme.tint(tint) : Theme.background,
+                                in: RoundedRectangle(cornerRadius: Theme.badgeRadius, style: .continuous)
+                            )
                     }
                     .buttonStyle(.press)
                     .accessibilityLabel(Words.CategoryEdit.icon(index + 1))

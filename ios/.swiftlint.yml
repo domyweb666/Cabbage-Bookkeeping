@@ -2,6 +2,8 @@
 # 門檻照準則 2-7 的嚴格組。四條擋裸數字的規則照準則 3-17，刻度名那條照 3-46。
 included:
   - AIFinance
+  - Shared
+  - BaicaiWidget
 excluded:
   - AIFinance/DesignSystem/DomyTokens.swift
 

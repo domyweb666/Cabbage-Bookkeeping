@@ -64,6 +64,8 @@ struct BudgetSheet: View {
     @State private var savedText = ""
     @State private var hadBudget = false
     @State private var saveFailed = false
+    @State private var showFixed = false
+    @State private var detent = PresentationDetent.medium
     @FocusState private var focused: Bool
 
     private var amount: Int? { Money.parse(text) }
@@ -89,6 +91,8 @@ struct BudgetSheet: View {
                     .font(Typo.title2.font.weight(.regular).monospacedDigit())
                     .card()
 
+                    fixedRow
+
                     if hadBudget {
                         Button(Words.Budget.clear) { save(0) }
                             .frame(minHeight: Metric.touch)
@@ -102,6 +106,7 @@ struct BudgetSheet: View {
             .background(Theme.background.ignoresSafeArea())
             .navigationTitle(Words.Budget.title)
             .navigationBarTitleDisplayMode(.inline)
+            .navigationDestination(isPresented: $showFixed) { FixedListView() }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button(Words.cancel) { dismiss() }
@@ -121,7 +126,7 @@ struct BudgetSheet: View {
         }
         .tint(Theme.accent)
         .interactiveDismissDisabled(text != savedText)
-        .presentationDetents([.medium, .large])
+        .presentationDetents([.medium, .large], selection: $detent)
         .presentationDragIndicator(.visible)
         .onAppear {
             if let current = Budget.amount(for: model.days.monthStart(of: model.today), in: model.budgets) {
@@ -130,6 +135,35 @@ struct BudgetSheet: View {
                 hadBudget = true
             }
             focused = true
+        }
+    }
+
+    /// 固定支出在還能花裡先扣，訂預算的時候順便看得到。
+    private var fixedRow: some View {
+        VStack(alignment: .leading, spacing: Gap.item) {
+            Button {
+                focused = false
+                detent = .large
+                showFixed = true
+            } label: {
+                HStack(spacing: Gap.item) {
+                    Text(Words.Fixed.title).foregroundStyle(Theme.primaryText)
+                    Spacer(minLength: 0)
+                    Text(Words.Fixed.count(model.activeFixedCount)).foregroundStyle(Theme.secondaryText)
+                    Image(systemName: "chevron.right").font(Typo.footnote.font).foregroundStyle(Theme.accent)
+                }
+                .font(Typo.body.font)
+                .padding(.horizontal, Gap.cardPad)
+                .frame(minHeight: Metric.row)
+                .background(Theme.card, in: RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous))
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.row)
+            .accessibilityIdentifier("budgetFixed")
+            Text(Words.Budget.fixedHint)
+                .font(Typo.footnote.font)
+                .foregroundStyle(Theme.secondaryText)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 

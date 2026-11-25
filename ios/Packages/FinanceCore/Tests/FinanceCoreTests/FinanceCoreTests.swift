@@ -118,7 +118,7 @@ final class ModelTests: XCTestCase {
         )
         let back = try JSONDecoder().decode(Txn.self, from: JSONEncoder().encode(row))
         XCTAssertEqual(back, row)
-        XCTAssertEqual(back.schemaVersion, 1)
+        XCTAssertEqual(back.schemaVersion, Txn.currentSchema)
     }
 
     func testTitleFallsBackToCategory() {
@@ -200,7 +200,8 @@ final class AnalysisTests: XCTestCase {
         XCTAssertEqual(r.comparison, .gap(days: 13))
         XCTAssertNil(r.observation)
         XCTAssertNil(r.categories.first?.usual)
-        XCTAssertEqual(AnalysisText.comparison(r), "中間有 13 天沒有紀錄，先不跟平常比。")
+        XCTAssertEqual(AnalysisText.comparison(r), "中間有幾天沒記，先不跟平常比。")
+        XCTAssertEqual(r.gapToFill, DayRange(from: "2026-11-04", to: "2026-11-16"))
     }
 
     func testMonthsWithGapsOrFewRecordsAreNotABaseline() {

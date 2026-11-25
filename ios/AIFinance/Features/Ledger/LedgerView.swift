@@ -1,5 +1,6 @@
 import FinanceCore
 import SwiftUI
+import UIKit
 
 /// 記帳分頁：月份、本月支出、每天的明細、底部一顆「記一筆」。
 struct LedgerView: View {
@@ -9,6 +10,7 @@ struct LedgerView: View {
 
     @State private var editing: Txn?
     @State private var showNew = false
+    @State private var showBudget = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -50,6 +52,24 @@ struct LedgerView: View {
         }
         .sheet(isPresented: $showNew) { EntrySheet(mode: .new) }
         .sheet(item: $editing) { EntrySheet(mode: .edit($0)) }
+        .sheet(isPresented: $showBudget) { BudgetSheet() }
+        .onAppear { openRequestedEntry() }
+        .onChange(of: EntryRequest.shared.pending) { _, _ in openRequestedEntry() }
+    }
+
+    /// 從小工具或控制中心來的「記一筆」。正在做別的就不打斷。
+    private func openRequestedEntry() {
+        guard EntryRequest.shared.pending else { return }
+        EntryRequest.shared.pending = false
+        guard !model.loadFailed, !showNew, !Self.isPresentingSomething else { return }
+        model.refreshToday()
+        showNew = true
+    }
+
+    private static var isPresentingSomething: Bool {
+        UIApplication.shared.connectedScenes
+            .compactMap { ($0 as? UIWindowScene)?.keyWindow?.rootViewController?.presentedViewController }
+            .first != nil
     }
 
     /// 現在是哪個月。固定在上面，總額那張卡跟著捲。
@@ -71,10 +91,62 @@ struct LedgerView: View {
         .accessibilityAddTraits(.isHeader)
     }
 
+    @ViewBuilder
     private var summary: some View {
         let report = model.report(month: model.today)
+        if report.budget == nil, !model.isEmpty {
+            summaryWithoutBudget(report)
+        } else {
+            summaryFigures(report)
+        }
+    }
+
+    /// 還沒訂預算：右邊是訂預算的入口。
+    private func summaryWithoutBudget(_ report: MonthReport) -> some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: Gap.group) {
+                spokenTotal(report)
+                Spacer(minLength: 0)
+                budgetButton
+            }
+            VStack(alignment: .leading, spacing: Gap.group) {
+                spokenTotal(report)
+                budgetButton
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private func spokenTotal(_ report: MonthReport) -> some View {
+        VStack(alignment: .leading, spacing: Gap.tight) {
+            caption(Words.Ledger.monthTotal)
+            monthAmount(report)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Words.Ledger.monthSpoken(total: report.expense, budget: nil))
+        .accessibilityIdentifier("monthTotal")
+    }
+
+    private var budgetButton: some View {
+        Button {
+            showBudget = true
+        } label: {
+            HStack(spacing: Gap.tight) {
+                Text(Words.Analysis.setBudget).lineLimit(1)
+                Image(systemName: "chevron.right").font(Typo.footnote.font)
+            }
+            .font(Typo.subheadline.font)
+            .foregroundStyle(Theme.accent)
+            .frame(minHeight: Metric.touch)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.press)
+        .accessibilityIdentifier("homeBudgetButton")
+    }
+
+    private func summaryFigures(_ report: MonthReport) -> some View {
         // 標籤一排、數字一排才對得齊。字放大到一排放不下時，改成上下兩塊。
-        return ViewThatFits(in: .horizontal) {
+        ViewThatFits(in: .horizontal) {
             VStack(spacing: Gap.tight) {
                 HStack {
                     caption(Words.Ledger.monthTotal)
@@ -184,7 +256,7 @@ private struct DayHeader: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .textCase(nil)
-        .listRowInsets(EdgeInsets(top: 0, leading: Gap.tight, bottom: Gap.item, trailing: Gap.tight))
+        .listRowInsets(EdgeInsets(top: 0, leading: Gap.cardPad, bottom: Gap.item, trailing: Gap.cardPad))
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isHeader)
     }
@@ -234,7 +306,9 @@ struct TxnRow: View {
         var parts: [String] = []
         if let dayText { parts.append(dayText) }
         if !item.note.isEmpty, dayText == nil { parts.append(category.name) }
-        if item.isOneOff { parts.append(Words.Ledger.oneOff) }
+        if let source = AnalysisText.source(of: item) { parts.append(source) }
+        // 每年固定的一定是一次性，不重複寫。
+        if item.isOneOff, item.fixed?.isYearly != true { parts.append(Words.Ledger.oneOff) }
         return parts.joined(separator: " · ")
     }
 

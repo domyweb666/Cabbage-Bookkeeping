@@ -8,7 +8,7 @@ App 的資料都在手機上，沒有後端要設定。要準備的是 Apple 這
 
 ## 1. 在 Apple 建好 App
 
-- Certificates, Identifiers & Profiles：註冊 App ID `org.domyweb.baicai`。不用勾任何額外功能。
+- Certificates, Identifiers & Profiles：先建 App Group `group.org.domyweb.baicai`，再註冊兩個 App ID：`org.domyweb.baicai` 和 `org.domyweb.baicai.widget`，都勾 App Groups 並選那個群組。一步一步在 [上架指南.md](上架指南.md) 步驟 4。
 - App Store Connect：新增一個 App，Bundle ID 選上面那個，名稱「白菜記帳」。
 
 ## 2. 找出金鑰和憑證
@@ -54,12 +54,12 @@ gh workflow run testflight.yml --ref main
 | 檔案 | 做什麼 |
 |---|---|
 | `.github/workflows/testflight.yml` | 整條流程 |
-| `ios/project.yml` | app 的 Release 設手動簽章，描述檔名 `Baicai CI App Store` |
+| `ios/project.yml` | app 和小工具的 Release 設手動簽章，描述檔名 `Baicai CI App Store`、`Baicai Widget CI App Store` |
 | `ios/ci/require_ready.sh` | 擋分支和缺 secret |
 | `ios/ci/select_xcode.sh` | 選正式版 Xcode 26 |
 | `ios/ci/restore_asc_key.sh`、`import_dist_cert.sh` | 還原金鑰和憑證，先驗格式 |
-| `ios/ci/asc_preflight.mjs` | 打包前問 Apple 金鑰、app 記錄、build 號 |
-| `ios/ci/appstore_profile.mjs` | 申請描述檔，只動自己那一張 |
+| `ios/ci/asc_preflight.mjs` | 打包前問 Apple 金鑰、兩個 App ID、app 記錄、build 號 |
+| `ios/ci/appstore_profile.mjs` | 申請 app 和小工具的描述檔，只動自己那兩張 |
 | `ios/ci/run_logged.sh` | 跑 xcodebuild，只印錯誤，遮掉名字和 ID |
 | `ios/ci/cleanup_signing.sh` | 最後刪掉鑰匙圈和金鑰檔 |
 

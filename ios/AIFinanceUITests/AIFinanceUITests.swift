@@ -29,6 +29,12 @@ final class AIFinanceUITests: XCTestCase {
         add(attachment)
     }
 
+    /// 等選中的動畫跑完再拍，不然格子是灰的。
+    private func settledShot(_ name: String) {
+        Thread.sleep(forTimeInterval: 1)
+        shot(name)
+    }
+
     private func text(containing fragment: String) -> XCUIElement {
         app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", fragment)).firstMatch
     }
@@ -143,7 +149,7 @@ final class AIFinanceUITests: XCTestCase {
         XCTAssertFalse(app.buttons["entrySave"].isEnabled, "還沒選分類不能記")
         app.buttons["category_飲食"].tap()
         XCTAssertTrue(app.buttons["entrySave"].isEnabled)
-        shot("03-記一筆-填好")
+        settledShot("03-記一筆-填好")
         app.buttons["entrySave"].tap()
 
         XCTAssertTrue(wait("toastText", contains: "記好了。飲食這個月共 NT$188"))
@@ -187,7 +193,7 @@ final class AIFinanceUITests: XCTestCase {
         shot("07-明細")
         row("便當", "NT$120").tap()
         XCTAssertTrue(app.buttons["entryDelete"].waitForExistence(timeout: 30))
-        shot("08-修改")
+        settledShot("08-修改")
         press("back", "back", "back")
         press("1", "5", "0")
         app.buttons["entrySave"].tap()
@@ -256,9 +262,35 @@ final class AIFinanceUITests: XCTestCase {
     func testAnalysisAfterAGap() {
         launch(demo: "returning")
         openAnalysis()
-        XCTAssertTrue(wait("comparisonText", contains: "中間有 13 天沒有紀錄，先不跟平常比。"))
+        XCTAssertTrue(wait("comparisonText", contains: "中間有幾天沒記，先不跟平常比。"))
         XCTAssertFalse(any("observationLink").exists)
         shot("15-分析-中間有空窗")
+    }
+
+    /// 補一個大概的數字，這個月就又能跟平常比；復原就回到空窗。
+    func testFillTheGap() {
+        launch(demo: "returning")
+        openAnalysis()
+        XCTAssertTrue(app.buttons["estimateButton"].waitForExistence(timeout: 30))
+        app.buttons["estimateButton"].tap()
+        let field = app.textFields["estimateAmount"]
+        XCTAssertTrue(field.waitForExistence(timeout: 30))
+        XCTAssertTrue(text(containing: "11/4 到 11/16 大概花了多少").exists)
+        XCTAssertFalse(app.buttons["estimateSave"].isEnabled)
+        field.tap()
+        field.typeText("3000")
+        shot("37-補大概的數字")
+        app.buttons["estimateSave"].tap()
+        XCTAssertTrue(wait("toastText", contains: "記好了。大概 NT$3,000"))
+        XCTAssertTrue(wait("comparisonText", contains: "平常到 25 號是"))
+        XCTAssertFalse(app.buttons["estimateButton"].exists)
+        shot("38-分析-補完")
+        app.tabBars.buttons["記帳"].tap()
+        XCTAssertTrue(any("monthTotal").waitForExistence(timeout: 30))
+        shot("39-明細-大概")
+        app.buttons["undoButton"].firstMatch.tap()
+        openAnalysis()
+        XCTAssertTrue(wait("comparisonText", contains: "中間有幾天沒記"))
     }
 
     func testRecapAtTheStartOfTheMonth() {
@@ -284,6 +316,130 @@ final class AIFinanceUITests: XCTestCase {
         XCTAssertTrue(wait("budgetButton", contains: "預算還剩 NT$2,995，每天 NT$499。"))
         app.tabBars.buttons["記帳"].tap()
         XCTAssertTrue(wait("monthTotal", contains: "還能花 NT$2,995"))
+    }
+
+    /// 沒訂預算時，記帳頁就有入口；訂預算的畫面連得到固定支出。
+    func testBudgetFromLedger() {
+        launch(demo: "fresh")
+        XCTAssertTrue(app.buttons["homeBudgetButton"].waitForExistence(timeout: 30))
+        shot("40-明細-還沒訂預算")
+        app.buttons["homeBudgetButton"].tap()
+        let field = app.textFields["budgetAmount"]
+        XCTAssertTrue(field.waitForExistence(timeout: 30))
+        field.tap()
+        field.typeText("10000")
+        shot("41-訂預算-固定支出那一列")
+        scrollTo(app.buttons["budgetFixed"])
+        app.buttons["budgetFixed"].tap()
+        XCTAssertTrue(shows("還沒有固定支出"))
+        shot("42-固定支出-空的")
+        app.navigationBars["固定支出"].buttons.firstMatch.tap()
+        XCTAssertTrue(app.buttons["budgetSave"].waitForExistence(timeout: 10))
+        app.buttons["budgetSave"].tap()
+        XCTAssertTrue(wait("monthTotal", contains: "還能花 NT$2,995"))
+        XCTAssertFalse(app.buttons["homeBudgetButton"].exists)
+    }
+
+    // MARK: - 固定支出
+
+    private func openFixed() {
+        XCTAssertTrue(app.buttons["addButton"].waitForExistence(timeout: 30))
+        app.tabBars.buttons["設定"].tap()
+        XCTAssertTrue(app.buttons["fixedRow"].waitForExistence(timeout: 30))
+        app.buttons["fixedRow"].tap()
+        XCTAssertTrue(app.buttons["fixedAdd"].waitForExistence(timeout: 30))
+    }
+
+    func testPlannedFigures() {
+        launch(demo: "planned")
+        XCTAssertTrue(wait("toastText", contains: "記好了。停車月租 NT$1,500"), "到期的打開就記好")
+        XCTAssertTrue(wait("monthTotal", contains: "NT$24,590"))
+        XCTAssertTrue(wait("monthTotal", contains: "還能花 NT$8,511"))
+        shot("43-明細-先扣固定支出")
+        openAnalysis()
+        XCTAssertTrue(wait("reservedText", contains: "已經先留 NT$2,899 給固定支出。"))
+        shot("44-分析-先留固定支出")
+    }
+
+    /// 新增一項、今天到期的當場記；左滑刪掉可以復原。
+    func testFixedAddDeleteAndUndo() {
+        launch(demo: "planned")
+        openFixed()
+        XCTAssertTrue(app.buttons["fixed_車險"].waitForExistence(timeout: 30))
+        shot("45-固定支出")
+
+        app.buttons["fixedAdd"].tap()
+        let amount = app.textFields["fixedAmount"]
+        XCTAssertTrue(amount.waitForExistence(timeout: 30))
+        XCTAssertFalse(app.buttons["fixedSave"].isEnabled)
+        amount.tap()
+        amount.typeText("390")
+        app.textFields["fixedName"].tap()
+        app.textFields["fixedName"].typeText("影音\n")
+        XCTAssertTrue(wait("fixedNext", contains: "下一次記在 2026 年 11 月 25 日。"))
+        shot("46-新增固定支出")
+        scrollTo(app.buttons["fixedCategory_訂閱"])
+        app.buttons["fixedCategory_訂閱"].tap()
+        settledShot("47-新增固定支出-填好")
+        app.buttons["fixedSave"].tap()
+        XCTAssertTrue(app.buttons["fixed_影音"].waitForExistence(timeout: 30))
+        XCTAssertTrue(wait("toastText", contains: "記好了。影音 NT$390"))
+
+        app.buttons["fixed_車險"].swipeLeft()
+        let delete = app.buttons["刪除"].firstMatch
+        if delete.waitForExistence(timeout: 3) { delete.tap() }
+        XCTAssertTrue(wait("toastText", contains: "已刪除「車險」"))
+        XCTAssertTrue(disappears(app.buttons["fixed_車險"]))
+        app.buttons["undoButton"].firstMatch.tap()
+        XCTAssertTrue(app.buttons["fixed_車險"].waitForExistence(timeout: 10), "復原後要回來")
+
+        app.buttons["fixed_車險"].tap()
+        XCTAssertTrue(app.textFields["fixedAmount"].waitForExistence(timeout: 30))
+        settledShot("48-改固定支出-每年")
+    }
+
+    func testFixedSurvivesRelaunch() {
+        launchOnDisk()
+        openFixed()
+        app.buttons["fixedAdd"].tap()
+        let amount = app.textFields["fixedAmount"]
+        XCTAssertTrue(amount.waitForExistence(timeout: 30))
+        amount.tap()
+        amount.typeText("500")
+        app.textFields["fixedName"].tap()
+        app.textFields["fixedName"].typeText("水費\n")
+        scrollTo(app.buttons["fixedCategory_居住"])
+        app.buttons["fixedCategory_居住"].tap()
+        app.buttons["fixedSave"].tap()
+        XCTAssertTrue(app.buttons["fixed_水費"].waitForExistence(timeout: 30))
+
+        app.terminate()
+        app.launch()
+        XCTAssertTrue(row("水費", "NT$500").waitForExistence(timeout: 30), "今天到期的記了一筆，重開還在")
+        XCTAssertTrue(wait("monthTotal", contains: "NT$500"), "重開不會再記一次")
+        openFixed()
+        XCTAssertTrue(app.buttons["fixed_水費"].waitForExistence(timeout: 30))
+    }
+
+    private func shootFixed(_ prefix: String) {
+        openFixed()
+        XCTAssertTrue(app.buttons["fixedAdd"].exists)
+        shot("\(prefix)-固定支出")
+        app.buttons["fixedAdd"].tap()
+        XCTAssertTrue(app.textFields["fixedAmount"].waitForExistence(timeout: 30))
+        shot("\(prefix)-新增固定支出")
+    }
+
+    func testFixedInDark() {
+        launch(demo: "planned", extra: ["-forceDark"])
+        shootFixed("49-深色")
+    }
+
+    func testFixedInLargeText() {
+        launch(
+            demo: "planned", extra: ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityL"]
+        )
+        shootFixed("50-大字")
     }
 
     // MARK: - 設定
@@ -353,7 +509,7 @@ final class AIFinanceUITests: XCTestCase {
         XCTAssertTrue(lateCategory("早餐").waitForExistence(timeout: 10), "勾了就要出現在格子")
         XCTAssertTrue(wait("entryAmount", contains: "88"), "按過的金額要還在")
         app.buttons["category_早餐"].tap()
-        shot("29-記一筆-多一格")
+        settledShot("29-記一筆-多一格")
         app.buttons["entrySave"].tap()
         XCTAssertTrue(row("早餐", "NT$88").waitForExistence(timeout: 30))
 
@@ -424,6 +580,22 @@ final class AIFinanceUITests: XCTestCase {
         openEntry()
         scrollCategories()
         XCTAssertFalse(app.buttons["category_貓咪"].exists)
+    }
+
+    /// 分類取名有「卡費」，提醒不要記兩次。
+    func testCardBillHint() {
+        launch()
+        openEntry()
+        openCategoriesFromEntry()
+        scrollTo(app.buttons["newCategory"])
+        app.buttons["newCategory"].tap()
+        let name = app.textFields["categoryName"]
+        XCTAssertTrue(name.waitForExistence(timeout: 30))
+        name.tap()
+        name.typeText("信用卡費")
+        XCTAssertTrue(shows("繳卡費不用再記", timeout: 10))
+        XCTAssertTrue(app.buttons["categorySave"].isEnabled, "提醒而已，照樣能存")
+        shot("51-分類-卡費提示")
     }
 
     /// 改內建的名字，明細跟著變；往後移一格，格子的順序跟著變。
@@ -531,7 +703,7 @@ final class AIFinanceUITests: XCTestCase {
         shot("21-深色-明細")
         openEntry()
         app.buttons["category_飲食"].tap()
-        shot("22-深色-記一筆")
+        settledShot("22-深色-記一筆")
         app.buttons["entryCancel"].tap()
         openAnalysis()
         shot("23-深色-分析")

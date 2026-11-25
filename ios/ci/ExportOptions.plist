@@ -14,6 +14,8 @@
 	<dict>
 		<key>org.domyweb.baicai</key>
 		<string>Baicai CI App Store</string>
+		<key>org.domyweb.baicai.widget</key>
+		<string>Baicai Widget CI App Store</string>
 	</dict>
 	<key>teamID</key>
 	<string>TEAM_ID_PLACEHOLDER</string>
