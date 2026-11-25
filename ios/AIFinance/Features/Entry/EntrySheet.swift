@@ -60,6 +60,7 @@ struct EntrySheet: View {
         NavigationStack {
             VStack(spacing: 0) {
                 amount
+                categoryHeader
                 ScrollViewReader { proxy in
                     ScrollView {
                         VStack(spacing: Gap.section) {
@@ -68,7 +69,7 @@ struct EntrySheet: View {
                             if typeSize.isAccessibilitySize { details }
                         }
                         .padding(.horizontal, Gap.screenMargin)
-                        .padding(.vertical, Gap.group)
+                        .padding(.bottom, Gap.item)
                         .id(Self.contentID)
                     }
                     .scrollDismissesKeyboard(.interactively)
@@ -155,31 +156,63 @@ struct EntrySheet: View {
         }
     }
 
+    /// 這一筆是什麼、多少錢。
     private var amount: some View {
-        HStack(alignment: .firstTextBaseline, spacing: Gap.tight) {
-            Text(Words.currency)
-                .font(Typo.title3.font)
-                .foregroundStyle(Theme.secondaryText)
-            Spacer()
-            AmountText(
-                text: Money.grouped(pad.value),
-                value: pad.value,
-                color: pad.value == 0 ? Theme.secondaryText : Theme.primaryText,
-                font: .system(.largeTitle, design: .rounded).bold()
-            )
-            .lineLimit(1)
-            .minimumScaleFactor(0.5)
-            .accessibilityIdentifier("entryAmount")
+        HStack(spacing: Gap.group) {
+            PickedCategory(category: model.book.find(categoryId))
+            Spacer(minLength: 0)
+            HStack(alignment: .firstTextBaseline, spacing: Gap.tight) {
+                Text(Words.currency)
+                    .font(Typo.subheadline.font)
+                    .foregroundStyle(Theme.secondaryText)
+                AmountText(
+                    text: Money.grouped(pad.value),
+                    value: pad.value,
+                    color: pad.value == 0 ? Theme.secondaryText : Theme.primaryText,
+                    font: .system(.largeTitle, design: .rounded).bold()
+                )
+                .lineLimit(1)
+                .minimumScaleFactor(0.5)
+                .accessibilityIdentifier("entryAmount")
+            }
+            // 位置不夠的時候先縮分類名，金額最後才縮。
+            .layoutPriority(1)
         }
+        .padding(.horizontal, Gap.cardPad)
+        .padding(.vertical, Gap.group)
+        .background(Theme.card, in: RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous))
         .padding(.horizontal, Gap.screenMargin)
-        .padding(.top, Gap.group)
-        .padding(.bottom, Gap.item)
+        .padding(.top, Gap.item)
+    }
+
+    /// 固定在格子上面，分類捲到哪裡都按得到「編輯」。
+    private var categoryHeader: some View {
+        HStack {
+            Text(Words.Entry.category)
+                .foregroundStyle(Theme.secondaryText)
+                .accessibilityAddTraits(.isHeader)
+            Spacer(minLength: Gap.item)
+            Button {
+                noteFocused = false
+                showCategories = true
+            } label: {
+                Text(Words.Entry.editCategories)
+                    .foregroundStyle(Theme.accent)
+                    .frame(minWidth: Metric.touch, minHeight: Metric.touch, alignment: .trailing)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.press)
+            .accessibilityLabel(Words.Entry.editCategoriesSpoken)
+            .accessibilityIdentifier("editCategories")
+        }
+        .font(Typo.subheadline.font)
+        .padding(.horizontal, Gap.screenMargin + Gap.tight)
     }
 
     private var categoryGrid: some View {
-        LazyVGrid(columns: columns, spacing: Gap.item) {
+        LazyVGrid(columns: columns, spacing: Gap.tight) {
             ForEach(model.book.choices(type, keeping: original?.categoryId)) { category in
-                CategoryCell(icon: category.icon, name: category.name, isSelected: category.id == categoryId) {
+                CategoryCell(category: category, isSelected: category.id == categoryId) {
                     if categoryId != category.id { Haptics.selected() }
                     categoryId = category.id
                 }
@@ -187,13 +220,9 @@ struct EntrySheet: View {
                 .accessibilityAddTraits(category.id == categoryId ? .isSelected : [])
                 .accessibilityIdentifier("category_\(category.name)")
             }
-            CategoryCell(icon: "slider.horizontal.3", name: Words.Entry.editCategories, isSelected: false, isQuiet: true) {
-                noteFocused = false
-                showCategories = true
-            }
-            .accessibilityLabel(Words.Entry.editCategoriesSpoken)
-            .accessibilityIdentifier("editCategories")
         }
+        .padding(Gap.item)
+        .background(Theme.card, in: RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous))
     }
 
     private var details: some View {
@@ -273,39 +302,56 @@ struct EntrySheet: View {
     }
 }
 
+/// 金額左邊：選了哪一類。還沒選是一格虛線。
+private struct PickedCategory: View {
+    let category: TxCategory?
+
+    var body: some View {
+        HStack(spacing: Gap.group) {
+            if let category {
+                CategoryIcon(category: category)
+            } else {
+                RoundedRectangle(cornerRadius: Theme.badgeRadius, style: .continuous)
+                    .strokeBorder(Theme.tertiaryText, style: Theme.Part.emptyBadge)
+                    .frame(width: Theme.Part.badge, height: Theme.Part.badge)
+                    .accessibilityHidden(true)
+            }
+            Text(category?.name ?? Words.Entry.pickCategory)
+                .font(category == nil ? Typo.body.font : Typo.title3.font)
+                .foregroundStyle(category == nil ? Theme.secondaryText : Theme.primaryText)
+                .lineLimit(1)
+                .minimumScaleFactor(0.5)
+                .accessibilityLabel(category.map { Words.Entry.picked($0.name) } ?? Words.Entry.pickCategory)
+        }
+    }
+}
+
 private struct CategoryCell: View {
-    let icon: String
-    let name: String
+    let category: TxCategory
     let isSelected: Bool
-    /// 「編輯」那一格，跟分類分得開。
-    var isQuiet = false
     let onTap: () -> Void
-
-    private var foreground: Color {
-        if isSelected { return Theme.onAccent }
-        return isQuiet ? Theme.accent : Theme.primaryText
-    }
-
-    private var fill: Color {
-        if isSelected { return Theme.accent }
-        return isQuiet ? Theme.accentSoft : Theme.card
-    }
 
     var body: some View {
         Button(action: onTap) {
             VStack(spacing: Gap.tight) {
-                Image(systemName: icon)
-                    .font(Typo.title3.font.weight(.regular))
-                    .frame(minHeight: Theme.Part.cellIcon)
-                Text(name)
-                    .font(Typo.footnote.font)
+                Image(systemName: category.icon)
+                    .font(Typo.body.font)
+                    // 色塊大小固定，圖示放大到這裡為止，不撐出去。
+                    .dynamicTypeSize(...DynamicTypeSize.xxLarge)
+                    .foregroundStyle(isSelected ? Theme.onTint : Theme.primaryText)
+                    .frame(width: Theme.Part.cellIconWidth, height: Theme.Part.cellIconHeight)
+                    .background(
+                        isSelected ? Theme.tint(category.tint) : Theme.background,
+                        in: RoundedRectangle(cornerRadius: Theme.badgeRadius, style: .continuous)
+                    )
+                Text(category.name)
+                    .font(Typo.footnote.font.weight(isSelected ? .semibold : .regular))
+                    .foregroundStyle(Theme.primaryText)
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
             }
-            .foregroundStyle(foreground)
-            .padding(.vertical, Gap.tight)
             .frame(maxWidth: .infinity, minHeight: Theme.Part.cell)
-            .background(fill, in: RoundedRectangle(cornerRadius: Theme.keyRadius, style: .continuous))
+            .contentShape(Rectangle())
         }
         .buttonStyle(.press)
     }

@@ -76,14 +76,29 @@ public struct Days: Sendable {
         return "\(parts[0]) 年 \(parts[1]) 月"
     }
 
+    /// 記帳頁每天的標題，分成粗的和旁邊灰的：今天＋11/25 週三；11/23＋週一；跨年 2025/12/31＋週三。
+    public func sectionLabel(for day: String, today: String) -> (title: String, detail: String) {
+        guard let d = date(of: day) else { return (day, "") }
+        let p = calendar.dateComponents([.year, .month, .day], from: d)
+        let short = "\(p.month!)/\(p.day!)"
+        let weekday = weekdayName(of: d)
+        if day == today { return ("今天", "\(short) \(weekday)") }
+        if day == adding(days: -1, to: today) { return ("昨天", "\(short) \(weekday)") }
+        return (day.prefix(4) == today.prefix(4) ? short : "\(p.year!)/\(short)", weekday)
+    }
+
+    private func weekdayName(of date: Date) -> String {
+        let weekdays = ["日", "一", "二", "三", "四", "五", "六"]
+        return "週" + weekdays[(calendar.component(.weekday, from: date) - 1) % 7]
+    }
+
     /// 明細的日期標題：今天、昨天、11 月 13 日 週五；跨年才帶年份。
     public func sectionTitle(for day: String, today: String) -> String {
         if day == today { return "今天" }
         if day == adding(days: -1, to: today) { return "昨天" }
         guard let d = date(of: day) else { return day }
-        let p = calendar.dateComponents([.year, .month, .day, .weekday], from: d)
-        let weekdays = ["日", "一", "二", "三", "四", "五", "六"]
-        let base = "\(p.month!) 月 \(p.day!) 日 週\(weekdays[(p.weekday! - 1) % 7])"
+        let p = calendar.dateComponents([.year, .month, .day], from: d)
+        let base = "\(p.month!) 月 \(p.day!) 日 \(weekdayName(of: d))"
         return day.prefix(4) == today.prefix(4) ? base : "\(p.year!) 年 \(base)"
     }
 }

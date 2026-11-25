@@ -1,7 +1,7 @@
 import FinanceCore
 import SwiftUI
 
-/// 記帳分頁：本月支出、每天的明細、底部一顆「記一筆」。
+/// 記帳分頁：月份、本月支出、每天的明細、底部一顆「記一筆」。
 struct LedgerView: View {
     @Environment(LedgerModel.self) private var model
 
@@ -16,8 +16,11 @@ struct LedgerView: View {
             if model.loadFailed {
                 EmptyMessage(title: Words.Failure.loadTitle, message: Words.Failure.loadMessage)
             } else {
-                header
+                title
                 if model.isEmpty {
+                    summary
+                        .card()
+                        .padding(.horizontal, Gap.screenMargin)
                     EmptyMessage(title: Words.Ledger.emptyTitle, message: Words.Ledger.emptyMessage)
                 } else {
                     list
@@ -49,30 +52,88 @@ struct LedgerView: View {
         .sheet(item: $editing) { EntrySheet(mode: .edit($0)) }
     }
 
-    private var header: some View {
-        let report = model.report(month: model.today)
-        return VStack(alignment: .leading, spacing: Gap.tight) {
-            Text(Words.Ledger.monthTotal)
+    /// 現在是哪個月。固定在上面，總額那張卡跟著捲。
+    private var title: some View {
+        HStack(alignment: .firstTextBaseline, spacing: Gap.item) {
+            Text(Days.shortMonth(of: model.today))
+                .font(Typo.largeTitle.font)
+                .foregroundStyle(Theme.primaryText)
+            Text(String(model.today.prefix(4)))
                 .font(Typo.subheadline.font)
                 .foregroundStyle(Theme.secondaryText)
-            AmountText(text: Money.format(report.expense), value: report.expense, font: Typo.largeTitle.font)
-                .lineLimit(1)
-                .minimumScaleFactor(0.6)
-            if let budget = report.budget {
-                AmountText(text: AnalysisText.homeBudget(budget), color: Theme.secondaryText, font: Typo.subheadline.font)
-            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, Gap.screenMargin)
         .padding(.top, Gap.pageTop)
         .padding(.bottom, Gap.group)
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(model.days.monthTitle(of: model.today))
+        .accessibilityAddTraits(.isHeader)
+    }
+
+    private var summary: some View {
+        let report = model.report(month: model.today)
+        // 標籤一排、數字一排才對得齊。字放大到一排放不下時，改成上下兩塊。
+        return ViewThatFits(in: .horizontal) {
+            VStack(spacing: Gap.tight) {
+                HStack {
+                    caption(Words.Ledger.monthTotal)
+                    Spacer(minLength: Gap.group)
+                    if let budget = report.budget { caption(AnalysisText.homeBudgetLabel(budget)) }
+                }
+                HStack(alignment: .firstTextBaseline) {
+                    monthAmount(report)
+                    Spacer(minLength: Gap.group)
+                    if let budget = report.budget { budgetAmount(budget) }
+                }
+            }
+            VStack(alignment: .leading, spacing: Gap.group) {
+                VStack(alignment: .leading, spacing: Gap.tight) {
+                    caption(Words.Ledger.monthTotal)
+                    monthAmount(report)
+                }
+                if let budget = report.budget {
+                    VStack(alignment: .leading, spacing: Gap.tight) {
+                        caption(AnalysisText.homeBudgetLabel(budget))
+                        budgetAmount(budget)
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(
+            Words.Ledger.monthSpoken(total: report.expense, budget: report.budget.map(AnalysisText.homeBudget))
+        )
         .accessibilityIdentifier("monthTotal")
+    }
+
+    private func caption(_ text: String) -> some View {
+        Text(text)
+            .font(Typo.subheadline.font)
+            .foregroundStyle(Theme.secondaryText)
+    }
+
+    private func monthAmount(_ report: MonthReport) -> some View {
+        AmountText(text: Money.format(report.expense), value: report.expense, font: Typo.title1.font)
+            .lineLimit(1)
+            .minimumScaleFactor(0.6)
+    }
+
+    private func budgetAmount(_ budget: BudgetStatus) -> some View {
+        let amount = AnalysisText.homeBudgetAmount(budget)
+        return AmountText(text: Money.grouped(amount), value: amount, color: Theme.accentStrong, font: Typo.title3.font)
+            .lineLimit(1)
     }
 
     private var list: some View {
         let sections = model.sections
         return List {
+            Section {
+                summary.listRowInsets(
+                    EdgeInsets(top: Gap.cardPad, leading: Gap.cardPad, bottom: Gap.cardPad, trailing: Gap.cardPad)
+                )
+            }
             ForEach(sections) { section in
                 Section {
                     ForEach(section.items) { item in
@@ -91,24 +152,69 @@ struct LedgerView: View {
                         }
                     }
                 } header: {
-                    HStack(spacing: Gap.item) {
-                        Text(model.title(for: section.day))
-                        Spacer()
-                        if section.incomeTotal > 0 {
-                            Text("+" + Money.grouped(section.incomeTotal)).foregroundStyle(Theme.income)
-                        }
-                        if section.expenseTotal > 0 {
-                            Text("-" + Money.grouped(section.expenseTotal))
-                        }
-                    }
-                    .font(Typo.footnote.font.monospacedDigit())
-                    .foregroundStyle(Theme.secondaryText)
-                    .textCase(nil)
+                    DayHeader(section: section)
                 }
             }
         }
         .ledgerList()
+        .contentMargins(.top, 0, for: .scrollContent)
         .animation(reduceMotion ? nil : Motion.change, value: sections)
+    }
+}
+
+/// 一天的標題：日期粗、星期灰，右邊是小計。只有一筆的時候小計跟那筆一樣，不重複寫。
+private struct DayHeader: View {
+    @Environment(LedgerModel.self) private var model
+
+    let section: DaySection
+
+    var body: some View {
+        let label = model.days.sectionLabel(for: section.day, today: model.today)
+        // 字放大到一排放不下時，小計換到下一排。
+        ViewThatFits(in: .horizontal) {
+            HStack(alignment: .firstTextBaseline, spacing: Gap.item) {
+                date(label)
+                Spacer(minLength: Gap.item)
+                totals
+            }
+            VStack(alignment: .leading, spacing: Gap.tight) {
+                date(label)
+                totals
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .textCase(nil)
+        .listRowInsets(EdgeInsets(top: 0, leading: Gap.tight, bottom: Gap.item, trailing: Gap.tight))
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isHeader)
+    }
+
+    private func date(_ label: (title: String, detail: String)) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: Gap.item) {
+            Text(label.title)
+                .font(Typo.title3.font.monospacedDigit())
+                .foregroundStyle(Theme.primaryText)
+            Text(label.detail)
+                .font(Typo.footnote.font.monospacedDigit())
+                .foregroundStyle(Theme.secondaryText)
+        }
+        .lineLimit(1)
+    }
+
+    @ViewBuilder
+    private var totals: some View {
+        if section.items.count > 1 {
+            HStack(alignment: .firstTextBaseline, spacing: Gap.item) {
+                if section.incomeTotal > 0 {
+                    Text(Money.listed(section.incomeTotal, type: .income)).foregroundStyle(Theme.income)
+                }
+                if section.expenseTotal > 0 {
+                    Text(Words.Ledger.dayTotal(section.expenseTotal)).foregroundStyle(Theme.secondaryText)
+                }
+            }
+            .font(Typo.subheadline.font.monospacedDigit())
+            .lineLimit(1)
+        }
     }
 }
 
@@ -137,12 +243,12 @@ struct TxnRow: View {
             CategoryIcon(category: category)
             VStack(alignment: .leading, spacing: Gap.tight) {
                 Text(model.title(of: item))
-                    .font(Typo.body.font)
+                    .font(Typo.headline.font)
                     .foregroundStyle(Theme.primaryText)
                     .lineLimit(1)
                 if !subtitle.isEmpty {
                     Text(subtitle)
-                        .font(Typo.caption.font)
+                        .font(Typo.footnote.font)
                         .foregroundStyle(Theme.secondaryText)
                         // 字放大時日期和「一次性」會排不下，不限行數。
                         .lineLimit(typeSize.isAccessibilitySize ? nil : 1)
@@ -150,9 +256,9 @@ struct TxnRow: View {
             }
             Spacer(minLength: Gap.item)
             AmountText(
-                text: Money.signed(item.amount, type: item.type),
+                text: Money.listed(item.amount, type: item.type),
                 color: item.type == .income ? Theme.income : Theme.primaryText,
-                font: Typo.body.font.weight(.medium)
+                font: Typo.headline.font
             )
         }
         .contentShape(Rectangle())
@@ -161,17 +267,20 @@ struct TxnRow: View {
     }
 }
 
+/// 分類色塊。顏色照大組，圖示照分類。
 struct CategoryIcon: View {
     let category: TxCategory
 
     var body: some View {
         Image(systemName: category.icon)
             .font(Typo.body.font)
-            // 圓圈大小固定，圖示放大到這裡為止，不撐出去。
+            // 色塊大小固定，圖示放大到這裡為止，不撐出去。
             .dynamicTypeSize(...DynamicTypeSize.xxLarge)
-            .foregroundStyle(Theme.accent)
+            .foregroundStyle(Theme.onTint)
             .frame(width: Theme.Part.badge, height: Theme.Part.badge)
-            .background(Theme.accentSoft, in: Circle())
+            .background(
+                Theme.tint(category.tint), in: RoundedRectangle(cornerRadius: Theme.badgeRadius, style: .continuous)
+            )
             .accessibilityHidden(true)
     }
 }

@@ -19,9 +19,9 @@ public enum Money {
         "NT$" + grouped(amount)
     }
 
-    /// 時間軸上帶正負號的寫法：支出 "-188"、收入 "+52,000"。
-    public static func signed(_ amount: Int, type: TxType) -> String {
-        (type == .expense ? "-" : "+") + grouped(amount)
+    /// 清單上的寫法：支出不加減號 "188"，收入 "+52,000"。
+    public static func listed(_ amount: Int, type: TxType) -> String {
+        (type == .expense ? "" : "+") + grouped(amount)
     }
 
     /// 解析使用者在金額欄輸入的文字：接受全形數字、千分位、前後空白；其他一律拒絕。
