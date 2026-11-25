@@ -1,6 +1,6 @@
-# Handoff: 第一版 TestFlight 0.2.0（3）已上傳，等多米真機回饋
+# Handoff: TestFlight 0.2.0（4）已上傳（含手感審查四條），等多米真機回饋
 
-> 更新：2026-11-25 17:00｜分支 main
+> 更新：2026-11-25 17:40｜分支 main
 > 舊的交接檔備份在 .vibe/handoff/archive/
 
 ## ✅ 這次完成了什麼
@@ -19,6 +19,7 @@
 
 ## 🚧 待決定（都要多米）
 
+- TestFlight 0.2.0（4）2026-11-25 17:38 上傳成功（run 45586389270，main fa41da1）。PR #5：手感審查四條、驗金鑰補換行，紀錄在 `.uiux/審查紀錄.md`、DECISIONS 53。真機請裝（4），手感全部沒上真機驗過
 - 第一版 TestFlight 0.2.0（3）2026-11-25 16:58 上傳成功（run 45580430436，main 4c26c5c）。第一次失敗是 API 金鑰貼上時換行不見，多米重放後過了。多米要在 App Store Connect 建內部測試群組、加自己（上架指南步驟 8），然後照 docs/TESTFLIGHT_CHECKLIST.md 在真機試
 - `docs/不能改的字串.md` 過目（準則 7-4：Bundle ID、App Group、widget kind `org.domyweb.baicai.widget.left`、control kind `org.domyweb.baicai.control.add`、網址 `baicai://entry`）
 - 準則 7-18 說鎖定畫面不放個人數值，這次照多米點的放了；鎖著時藏不藏要看真機與系統設定
@@ -46,7 +47,7 @@
 ## ⏭️ 下一步從哪繼續
 
 1. 等多米的真機回饋再改。之後出版一樣 `gh workflow run testflight.yml --ref main`，build 號用 run number 會自己加
-2. main 的 CI 45571001791 第一次紅在 testCategoriesInLargeText（點「常用分類」那一下模擬器沒吃到，程式跟 PR 綠的那份一樣），已重跑。再紅就當真的查
+2. testCategoriesInLargeText 偶爾會紅（點「常用分類」那一下沒反應），測試已改成還停在設定頁就再點一次。再紅就當真的查。併完的 main CI 是 45586383755，看一下綠不綠
 3. 大字時設定頁 VeggieRow 的圖示（觸覺回饋、固定支出）比圖示欄寬，會貼到字，還沒改
 
 ## 🗑️ 雜訊
