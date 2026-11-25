@@ -68,6 +68,14 @@ struct SettingsView: View {
             }
             .buttonStyle(.row)
             .accessibilityIdentifier("categoriesRow")
+            RowDivider()
+            NavigationLink {
+                FixedListView()
+            } label: {
+                VeggieRow(icon: "calendar.badge.clock", title: Words.Fixed.title, accessory: .push)
+            }
+            .buttonStyle(.row)
+            .accessibilityIdentifier("fixedRow")
         }
     }
 
