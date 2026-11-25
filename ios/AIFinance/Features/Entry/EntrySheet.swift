@@ -72,6 +72,11 @@ struct EntrySheet: View {
                         guard let id = form?.categoryId else { return }
                         Task { proxy.scrollTo(id) }
                     }
+                    // 點到露一半的格子，捲到看得到整格。
+                    .onChange(of: categoryId) { _, id in
+                        guard let id, !isLarge else { return }
+                        withAnimation(Motion.change) { proxy.scrollTo(id) }
+                    }
                     .scrollDismissesKeyboard(.interactively)
                     // 分類超過一個畫面時閃一下捲軸，看得出下面還有。
                     .scrollIndicatorsFlash(onAppear: true)
