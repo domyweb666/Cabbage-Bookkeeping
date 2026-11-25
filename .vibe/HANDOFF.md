@@ -1,4 +1,4 @@
-# Handoff: PR #4 已併 main（056d03b），第一版 TestFlight 卡在 API 金鑰，等多米重放
+# Handoff: 第一版 TestFlight 0.2.0（3）已上傳，等多米真機回饋
 
 > 更新：2026-11-25 17:00｜分支 main
 > 舊的交接檔備份在 .vibe/handoff/archive/
@@ -19,8 +19,7 @@
 
 ## 🚧 待決定（都要多米）
 
-- 第一版 TestFlight：第一次（45571004952）停在「還原 API 金鑰並驗格式」，`ASC_KEY_P8_BASE64` 放的是原文、換行不見（253 bytes，正常約 257）。多米要自己重放（建議 E:\人篸修煉\AuthKey_F3286X6SY3.p8 轉 base64，`ASC_KEY_ID` 跟著改 F3286X6SY3；AI 不讀不傳金鑰）。多米 16:50 說「放好了」，但 `gh secret list` 顯示還是 07:17Z 那份，沒有更新，所以沒有再觸發。觸發前先看這個時間
-- 後面的憑證、描述檔、App ID／App Group 檢查、archive、上傳都還沒跑過
+- 第一版 TestFlight 0.2.0（3）2026-11-25 16:58 上傳成功（run 45580430436，main 4c26c5c）。第一次失敗是 API 金鑰貼上時換行不見，多米重放後過了。多米要在 App Store Connect 建內部測試群組、加自己（上架指南步驟 8），然後照 docs/TESTFLIGHT_CHECKLIST.md 在真機試
 - `docs/不能改的字串.md` 過目（準則 7-4：Bundle ID、App Group、widget kind `org.domyweb.baicai.widget.left`、control kind `org.domyweb.baicai.control.add`、網址 `baicai://entry`）
 - 準則 7-18 說鎖定畫面不放個人數值，這次照多米點的放了；鎖著時藏不藏要看真機與系統設定
 - 研究對照第六段：第一個畫面的主角（建議「看」）、成功的感覺（多米自己寫）、候選表、付款方式（建議不做）、真人情境。閘門 1 沒過，A B C 是多米點名先做
@@ -31,7 +30,7 @@
 
 - 小工具、鎖定畫面、控制中心沒有截圖，真機才看得到：控制中心冷啟動打不打得開記一筆、主畫面單色外觀、鎖定時遮不遮數字（都在 docs/TESTFLIGHT_CHECKLIST.md）
 - 收入 4 類時分類白卡下面會空一塊（圖 05）：好處是切支出收入時日期不會跳，先維持
-- 簽章那幾支 mjs 過 node --check，沒真的對 Apple 跑過
+- 簽章整條已實際跑過（兩個 App ID、兩張描述檔、App Group、上傳都過）
 
 ## 📌 關鍵決策
 
@@ -46,7 +45,7 @@
 
 ## ⏭️ 下一步從哪繼續
 
-1. `gh secret list` 看 `ASC_KEY_P8_BASE64` 時間晚於 2026-11-25T07:48Z，才 `gh workflow run testflight.yml --ref main`，看到上傳成功
+1. 等多米的真機回饋再改。之後出版一樣 `gh workflow run testflight.yml --ref main`，build 號用 run number 會自己加
 2. main 的 CI 45571001791 第一次紅在 testCategoriesInLargeText（點「常用分類」那一下模擬器沒吃到，程式跟 PR 綠的那份一樣），已重跑。再紅就當真的查
 3. 大字時設定頁 VeggieRow 的圖示（觸覺回饋、固定支出）比圖示欄寬，會貼到字，還沒改
 
