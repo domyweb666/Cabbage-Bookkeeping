@@ -73,16 +73,31 @@ struct LedgerView: View {
 
     private var summary: some View {
         let report = model.report(month: model.today)
-        // 字放大到一排放不下時，改成上下兩排。
+        // 標籤一排、數字一排才對得齊。字放大到一排放不下時，改成上下兩塊。
         return ViewThatFits(in: .horizontal) {
-            HStack(alignment: .bottom, spacing: Gap.group) {
-                monthTotal(report)
-                Spacer(minLength: 0)
-                if let budget = report.budget { budgetLeft(budget, alignment: .trailing) }
+            VStack(spacing: Gap.tight) {
+                HStack {
+                    caption(Words.Ledger.monthTotal)
+                    Spacer(minLength: Gap.group)
+                    if let budget = report.budget { caption(AnalysisText.homeBudgetLabel(budget)) }
+                }
+                HStack(alignment: .firstTextBaseline) {
+                    monthAmount(report)
+                    Spacer(minLength: Gap.group)
+                    if let budget = report.budget { budgetAmount(budget) }
+                }
             }
             VStack(alignment: .leading, spacing: Gap.group) {
-                monthTotal(report)
-                if let budget = report.budget { budgetLeft(budget, alignment: .leading) }
+                VStack(alignment: .leading, spacing: Gap.tight) {
+                    caption(Words.Ledger.monthTotal)
+                    monthAmount(report)
+                }
+                if let budget = report.budget {
+                    VStack(alignment: .leading, spacing: Gap.tight) {
+                        caption(AnalysisText.homeBudgetLabel(budget))
+                        budgetAmount(budget)
+                    }
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -93,26 +108,22 @@ struct LedgerView: View {
         .accessibilityIdentifier("monthTotal")
     }
 
-    private func monthTotal(_ report: MonthReport) -> some View {
-        VStack(alignment: .leading, spacing: Gap.tight) {
-            Text(Words.Ledger.monthTotal)
-                .font(Typo.subheadline.font)
-                .foregroundStyle(Theme.secondaryText)
-            AmountText(text: Money.format(report.expense), value: report.expense, font: Typo.title1.font)
-                .lineLimit(1)
-                .minimumScaleFactor(0.6)
-        }
+    private func caption(_ text: String) -> some View {
+        Text(text)
+            .font(Typo.subheadline.font)
+            .foregroundStyle(Theme.secondaryText)
     }
 
-    private func budgetLeft(_ budget: BudgetStatus, alignment: HorizontalAlignment) -> some View {
+    private func monthAmount(_ report: MonthReport) -> some View {
+        AmountText(text: Money.format(report.expense), value: report.expense, font: Typo.title1.font)
+            .lineLimit(1)
+            .minimumScaleFactor(0.6)
+    }
+
+    private func budgetAmount(_ budget: BudgetStatus) -> some View {
         let amount = AnalysisText.homeBudgetAmount(budget)
-        return VStack(alignment: alignment, spacing: Gap.tight) {
-            Text(AnalysisText.homeBudgetLabel(budget))
-                .font(Typo.subheadline.font)
-                .foregroundStyle(Theme.secondaryText)
-            AmountText(text: Money.grouped(amount), value: amount, color: Theme.accentStrong, font: Typo.title3.font)
-                .lineLimit(1)
-        }
+        return AmountText(text: Money.grouped(amount), value: amount, color: Theme.accentStrong, font: Typo.title3.font)
+            .lineLimit(1)
     }
 
     private var list: some View {

@@ -72,3 +72,10 @@
 - main 的 CI 45476466019 紅：一個是模擬器逾時（infra），一個是編輯分類左滑偶爾擋不住（真的），已改成 sheet，在 appstore-prep 還沒推。等簽章那包好了一起開 PR。畫布 H 區的編輯／新增分類要改成 sheet 樣子。
 - PR #2（appstore-prep）CI 45483787949 全綠，21 個畫面測試，編輯分類彈出視窗的截圖看過。等多米說併不併。畫布正在同步（編輯／新增分類改 sheet、F2）。併完等六個 secret 放好，用 `gh workflow run testflight.yml --ref main` 出第一版。
 - 2026-11-25 PR #2 已併進 main（a801d91）。等多米放六個 secret、登記 App ID、建 app、回資料結構，再 `gh workflow run testflight.yml --ref main`。畫布第 9 版跟 main 一致。提交要指定檔名，不准 commit -a。
+
+## 層級改版（2026-11-25 上午，分支 ledger-hierarchy）
+
+- 多米看比較頁（.uiux/介面比較-2026-11-25/）選：記帳頁 A、記一筆 A，記一筆的備註、日期和數字鍵盤留原本的樣子。決定寫在 DECISIONS 第 51 點。
+- 程式寫完已推，CI 用 `gh workflow run CI --ref ledger-hierarchy` 跑，第一次是 45533833950。沒開 PR，等多米說併不併。
+- [ ] K：看 CI 與截圖 01、02、03、05、07、08、10、12、13、21、22、25、26、29、33（間距、日期標題的縮排、總額卡、分類卡三排放不放得下、大字）｜CI 綠、截圖看過
+- [ ] L：畫布 https://claude.ai/artifact/443tfNbnKAAcyP23k5uAw7 的記帳頁與記一筆相關畫板同步｜依賴 K
