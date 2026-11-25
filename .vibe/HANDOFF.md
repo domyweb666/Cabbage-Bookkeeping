@@ -19,7 +19,7 @@
 
 ## 🚧 待決定（都要多米）
 
-- PR #4 已開（https://github.com/domyweb666/Cabbage-Bookkeeping/pull/4），Auto-fix 開著，等多米說併。多米 2026-11-25 下午說後台建好了（沒有用 API 核對過）。secret 有四個，還缺 APPLE_DIST_P12_BASE64、APPLE_DIST_P12_PASSWORD。這個交接檔 commit 在本機沒推，免得重跑 PR 的 CI。原本寫的是：併之前多米要先在後台做上架指南步驟 4：建 App Group `group.org.domyweb.baicai`；登記 `org.domyweb.baicai` 和 `org.domyweb.baicai.widget`，都勾 App Groups 並 Configure 選那個群組。出第一版前一定要做完
+- PR #4 已開（https://github.com/domyweb666/Cabbage-Bookkeeping/pull/4），Auto-fix 開著，等多米說併。多米 2026-11-25 下午說後台建好了（沒有用 API 核對過）。多米 2026-11-25 說剩下兩個 secret 也放好了（憑證是 voicetype-signing 那張，AI 不讀不傳）；.p12 密碼對不對要等出版時 CI 檢查。這個交接檔 commit 在本機沒推，免得重跑 PR 的 CI。原本寫的是：併之前多米要先在後台做上架指南步驟 4：建 App Group `group.org.domyweb.baicai`；登記 `org.domyweb.baicai` 和 `org.domyweb.baicai.widget`，都勾 App Groups 並 Configure 選那個群組。出第一版前一定要做完
 - `docs/不能改的字串.md` 過目（準則 7-4：Bundle ID、App Group、widget kind `org.domyweb.baicai.widget.left`、control kind `org.domyweb.baicai.control.add`、網址 `baicai://entry`）
 - 準則 7-18 說鎖定畫面不放個人數值，這次照多米點的放了；鎖著時藏不藏要看真機與系統設定
 - 研究對照第六段：第一個畫面的主角（建議「看」）、成功的感覺（多米自己寫）、候選表、付款方式（建議不做）、真人情境。閘門 1 沒過，A B C 是多米點名先做
