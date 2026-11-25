@@ -1,98 +1,55 @@
-# Handoff: 白菜記帳改成手選金額分類的傳統記帳，分析頁照 analytics-book 重做
+# Handoff: 固定支出、補大概的數字、小工具做完，等最後一次 CI、畫布同步，再向多米報告
 
-> 產出時間：2026-11-25 01:11
-> 分支 build-mvp，PR #1，最後一個程式 commit 53b2627（已推）
+> 產出時間：2026-11-25 中午｜分支 spend-left（從 c8c07fc 開，沒開 PR）｜最後程式 commit 是「記一筆：點到露一半的分類格會捲進來」（已推）
+> 舊的交接檔備份在 .vibe/handoff/archive/
 
 ## ✅ 這次完成了什麼
 
-- 拿掉聚光燈引導、火柴人小白菜
-- 拿掉 AI 解析、語音、問答、確認卡、離線佇列；App 不再連 Supabase，紀錄存手機（SwiftData）
-- 三個分頁：記帳、分析、設定。記一筆＝按金額、點分類、記下；備註與「一次性」選填
-- 分析頁四張卡（花了多少、花在哪一類、最大的三筆、最近幾個月）＋月初回顧＋每月預算
-- `.analytics/` 設計檔（檔名帶 -暫定）、README 與 docs/ 改成現況
-- CI 換 macos-26／Xcode 26；TestFlight secrets 剩四個
-- commit 81b5bf6 的 CI 全綠：單元測試 33 個、畫面測試 12 個；27 張截圖逐張看過，挑出 5 個問題改在 53b2627
-
-## 🚧 還沒做完 / 待決定
-
-- 53b2627 的 CI 還沒看結果，改過的 5 個地方還沒看截圖
-- `supabase/` 和 `eval/`：多米 2026-11-25 說先留著，不要刪、不要再問
-- 多米要確認 `.analytics/` 的閘門 0、1、2（資料結構最好在上 TestFlight 前確認）；閘門 3、4 要真人
-- 還沒做：TestFlight 上傳（secrets 沒給）、真機驗收、接 VeggieKit 與 domy-design、PR #1 併 main
-
-## 📌 關鍵決策（這次定下來的）
-
-- 資料只在手機、不連網路；自己定的小決定都在 docs/DECISIONS.md 第 27 到 36 點
-- 分析：只跟自己平常比（前幾個月同期的最少到最多），空窗不當零，0 則通知，不用百分比、平均、紅色、連續天數
-- 算法在 FinanceCore/Analysis.swift，改了要同步 .analytics/05
-
-## 📂 下個會話最重要的檔案
-
-- .analytics/閘門紀錄.md、.analytics/05-指標字典-暫定.md
-- ios/AIFinance/Features/Entry/EntrySheet.swift、ios/AIFinance/Features/Analysis/AnalysisView.swift
-- ios/AIFinanceUITests/AIFinanceUITests.swift
-- docs/DECISIONS.md、docs/TESTFLIGHT_CHECKLIST.md
-
-## ⏭️ 下一步從哪繼續
-
-1. `gh run list -w CI -L 3` 找 53b2627（或之後）那次。沒有那一次的話，`gh workflow run CI --ref build-mvp` 或再推一次
-2. 紅的話修；綠的話 `gh run download <編號> -n ios-screenshots`，看 06、11、12、14、23、26、27
-3. 沒問題就向多米做收尾報告，問上面「待決定」
+- 多米貼的記帳研究對照：`.uiux/研究對照-2026-11-25.md`。多米回「三件都做」（A 固定支出與還能花、B 補大概的數字、C 小工具與控制中心）
+- FinanceCore：Fixed.swift、Home.swift、FixedTests.swift；畫面、資料層、小工具（BaicaiWidget、Shared）、簽章（兩個 App ID 兩張描述檔）、上架指南都寫完
+- CI 45543399265 全綠：單元測試全過、29 個畫面測試全過、小工具有包進 app、App Group 沒警告。截圖 02、05、07、08、10、22、26、29、33、37 到 51 看過，都對（還能花 8,511 對得上單元測試）
+- 層級改版（PR #3 已由另一個會話併 main，a53a8f7）截圖抓到的 7 個問題在同一包改了，看過新圖
+- 之後只多一行：點到露一半的分類格捲進來（圖 29 的問題），CI 45546805188 在跑
 
 ## 🧩 剩下的工作（工作包）
 
-- [x] A：（45450035999 全綠）看 build-mvp 最新 push 的 CI（「次要文字加深…」那個 commit；排不到 Mac 機器就 gh run rerun）｜12 個畫面測試全過｜無｜無
-- [x] B：（截圖看過，都對）看截圖確認 53b2627 的 5 個修正，加上這次 4 個（灰字加深、停用按鈕看得見、大字「這個月還沒過完」在條的下面、預算句「每天 NT$」一行放得下）｜看 02、06、11、12、14、22、23、26、27｜EntrySheet、AnalysisView｜依賴 A
-- [ ] C：收尾報告給多米｜他收到待決定清單｜無｜依賴 B
+- [ ] M：看 CI 45546805188（紅就修，改完 push 再 `gh workflow run CI --ref spend-left`），看圖 29 的「早餐」整格看得到｜CI 綠｜EntrySheet.swift｜無
+- [ ] O：畫布 https://claude.ai/artifact/443tfNbnKAAcyP23k5uAw7 同步與 README（上個會話派了子代理在做，沒做完就重派；README、docs/SETUP.md 的改動還沒提交，先 git status 看）｜畫布跟程式一致｜README.md、docs/SETUP.md｜無
+- [ ] Q：提交 README 與交接檔，向多米做收尾報告（內容看下面「待決定」）｜多米收到｜無｜M、O
 
-- [x] D：整個 app 介面的 Design 畫布畫好了：https://claude.ai/artifact/443tfNbnKAAcyP23k5uAw7 （30 張，A 到 G 七區，照程式現況）。等多米看。四個小問題多米說要改，程式已改；同名合併沒做
+## 🚧 待決定（都要多米）
 
-- [x] E：畫布已同步四個小修
+- PR 併不併。併之前多米要先在後台做上架指南步驟 4：建 App Group `group.org.domyweb.baicai`；登記 `org.domyweb.baicai` 和 `org.domyweb.baicai.widget`，都勾 App Groups 並 Configure 選那個群組。出第一版前一定要做完
+- `docs/不能改的字串.md` 過目（準則 7-4：Bundle ID、App Group、widget kind `org.domyweb.baicai.widget.left`、control kind `org.domyweb.baicai.control.add`、網址 `baicai://entry`）
+- 準則 7-18 說鎖定畫面不放個人數值，這次照多米點的放了；鎖著時藏不藏要看真機與系統設定
+- 研究對照第六段：第一個畫面的主角（建議「看」）、成功的感覺（多米自己寫）、候選表、付款方式（建議不做）、真人情境。閘門 1 沒過，A B C 是多米點名先做
+- `.analytics/` 閘門 0、1、2；資料結構這次多了 fixed、estimate 兩欄，上 TestFlight 前確認
+- 還有上架指南最後的 12 項與六個 secret
 
-- [x] F（45456965988 全綠）：UI 照準則改，程式寫完已推（含 8 個讀程式抓到的問題修正），等 CI（沒編譯過；沒把握處：CategoryPickerView 編輯模式常開、contentMargins、DomyPage、ContentUnavailableView）。對照表 .uiux/準則對照.md。待多米決定：slug baicai 與介紹、信箱、隱私權網址、Apple ID、刪一筆要不要先問、核心動作卡｜CI 綠、截圖看過｜ios/｜無
-- [x] H：分類與圖示加多（支出約 50、收入約 17，舊編號不變）、「常用分類」畫面可勾選、拖曳排序、自己取名（新增自訂、改內建名字圖示），存 SwiftData；分類查找改走 CategoryBook；找不到分類的紀錄不能漏算（多米 2026-11-25 分三則講的）｜CI 綠、截圖看過｜跟 F 同一個子代理在改｜F
-- [x] I：.analytics 已補
-- [x] J：README、docs、.analytics 已補
-- [x] G：畫布已更新到第 7 版（53 張）。之後只有大字副標不限行數，畫布 F2 還沒跟上
+## 還沒驗證
 
-## 🗑️ 雜訊（下次別重新討論）
+- 小工具、鎖定畫面、控制中心沒有截圖，真機才看得到：控制中心冷啟動打不打得開記一筆、主畫面單色外觀、鎖定時遮不遮數字（都在 docs/TESTFLIGHT_CHECKLIST.md）
+- 收入 4 類時分類白卡下面會空一塊（圖 05）：好處是切支出收入時日期不會跳，先維持
+- 簽章那幾支 mjs 過 node --check，沒真的對 Apple 跑過
 
-- Bash 單一指令超過 8KB 會壞，這次撞三次，長內容一律 Write 成檔再跑
-- 自己的型別叫 `Observation` 會跟系統模組撞名，已改 SpendingNote
+## 📌 關鍵決策
 
-## 補記（2026-11-25 最後一段）
+- 全寫在 docs/DECISIONS.md 第 52 點。重點：還能花 = 預算 − 這個月記的（年度不算）− 還沒到的每月固定 − 年度的十二分之一；自動記的不算有在記帳；資料庫不搬，小工具讀快照
+- 多米定過、不要再問：左滑刪一筆不用先問；supabase/ 和 eval/ 先留著；TestFlight 手動簽章＋手動觸發
 
-- 45456965988 全綠（21 個畫面測試），42 張截圖看過。之後只改：日期與備註固定在數字鍵盤上面（大字照舊跟著捲）、分類圖示在大字時不撐出圓圈。這次 push 要再看一次 CI 與 02、03、06、08、26、35。
-- 45462907398 也全綠、截圖看過（日期備註固定、大字圖示）。最後一批三個小修（勾一次性不多一行、閃捲軸、大字副標）已推，CI 還在跑。
-- 多米 2026-11-25 定：左滑刪一筆不用先問，能復原就好（維持現狀，不要再問）。
-- 45467980182（12f774b）全綠，21 個畫面測試。「一次性，不跟平常比」按鈕、閃捲軸、大字「最大的三筆」三樣沒有截圖，真機要看。
-- 2026-11-25 PR #1 已併進 main（b4d9f74），內容跟 build-mvp 一樣。沒設 secret，TestFlight 會自己略過。上架指南寫好了 docs/上架指南.md（26 步，分支 appstore-prep，最後 12 項等多米給）。之後的修改從 main 另開分支。
-- 上架前要改：app 內加隱私權政策連結、testflight.yml 改手動簽章與手動觸發（等多米點頭）、.gitignore 補 .cer .key。
-- 多米 2026-11-25 定：TestFlight 改手動簽章＋手動觸發。子代理在改 testflight.yml、ios/ci、project.yml、指南（分支 appstore-prep）。改完要推分支開 PR 讓 CI 驗 project.yml，再併 main。
-- main 的 CI 45476466019 紅：一個是模擬器逾時（infra），一個是編輯分類左滑偶爾擋不住（真的），已改成 sheet，在 appstore-prep 還沒推。等簽章那包好了一起開 PR。畫布 H 區的編輯／新增分類要改成 sheet 樣子。
-- PR #2（appstore-prep）CI 45483787949 全綠，21 個畫面測試，編輯分類彈出視窗的截圖看過。等多米說併不併。畫布正在同步（編輯／新增分類改 sheet、F2）。併完等六個 secret 放好，用 `gh workflow run testflight.yml --ref main` 出第一版。
-- 2026-11-25 PR #2 已併進 main（a801d91）。等多米放六個 secret、登記 App ID、建 app、回資料結構，再 `gh workflow run testflight.yml --ref main`。畫布第 9 版跟 main 一致。提交要指定檔名，不准 commit -a。
+## 📂 下個會話最重要的檔案
 
-## 層級改版（2026-11-25 上午，分支 ledger-hierarchy）
+- docs/DECISIONS.md（51、52）、docs/上架指南.md 步驟 4、.uiux/研究對照-2026-11-25.md
+- ios/Packages/FinanceCore/Sources/FinanceCore/Fixed.swift、Home.swift
+- ios/AIFinance/Features/Fixed/、ios/BaicaiWidget/LeftWidget.swift、ios/Shared/
 
-- 多米看比較頁（.uiux/介面比較-2026-11-25/）選：記帳頁 A、記一筆 A，記一筆的備註、日期和數字鍵盤留原本的樣子。決定寫在 DECISIONS 第 51 點。
-- 程式寫完已推，CI 用 `gh workflow run CI --ref ledger-hierarchy` 跑，第一次是 45533833950。沒開 PR，等多米說併不併。
-- [x] K：（45536862001 全綠、c8c07fc，截圖看過，修了總額卡標籤對齊）看 CI 與截圖 01、02、03、05、07、08、10、12、13、21、22、25、26、29、33（間距、日期標題的縮排、總額卡、分類卡三排放不放得下、大字）｜CI 綠、截圖看過
-- [x] L：（畫布第 11 版）畫布 https://claude.ai/artifact/443tfNbnKAAcyP23k5uAw7 的記帳頁與記一筆相關畫板同步｜依賴 K
+## ⏭️ 下一步從哪繼續
 
-## 記帳研究對照（2026-11-25 中午）
+1. `git status`、`gh run list -w CI -b spend-left -L 2`，照工作包 M、O、Q 做
+2. 報告完等多米說併不併，併完出版用 `gh workflow run testflight.yml --ref main`
 
-- CI 45533833950（f221061）全綠，截圖已由另一個會話看完（K 完成）。
-- 多米貼了記帳 JTBD 研究，對照與建議在 `.uiux/研究對照-2026-11-25.md`（未提交）。三個缺口：「還能花」沒扣固定與年度支出、斷一段那個月就不能比、沒有 app 外的入口。等多米定主角、候選表、A／B／C。
-- 做小工具的話，App Group 與小工具的 App ID 要在多米登記 App ID 之前定（上架指南第 4 步要改）。
+## 🗑️ 雜訊
 
-## 固定支出、補大概、小工具（2026-11-25 中午，分支 spend-left，從 c8c07fc 開）
-
-- 多米說 A、B、C 三件都做。PR #3（層級改版）已由另一個會話併 main（a53a8f7），內容跟 spend-left 的起點一樣。
-- FinanceCore：Fixed.swift、Home.swift、測試 FixedTests.swift，33c213d 的單元測試全過。畫面、小工具、簽章都寫完，整包 CI 是 45542325571（等結果）。決定在 DECISIONS 第 52 點。
-- 層級改版截圖抓到的 7 個問題（分類卡捲動、大字分類名、刪除的顏色、編輯分類選中的樣子、備註提示字對比、日期跳動、日期標題對齊）在同一包改了，要看新截圖。
-- [ ] M：CI 修到綠（改完 git push 再 `gh workflow run CI --ref spend-left`）
-- [ ] N：看截圖 02、03、05、07、08、22、26、29、33、37 到 51。特別看收入 4 類時白卡會不會撐太高（05）、DayHeader 對齊（07）、43、44 的還能花是 8,511
-- [ ] O：畫布 https://claude.ai/artifact/443tfNbnKAAcyP23k5uAw7 同步（層級改版加這次；取代 L）
-- [ ] P：README 補固定支出、補大概、小工具
-- [ ] Q：向多米報告：後台要先建 App Group 與兩個 App ID（上架指南步驟 4）才能併 main；小工具、控制中心、鎖定時藏不藏要真機看；不能改的字串在 docs/不能改的字串.md 等他過目
+- 自己的型別撞系統名：Observation、Timeline（小工具要寫 WidgetKit.Timeline）
+- Bash 單一指令超過 8KB 會壞，長內容用 Write；提交指定檔名，不准 commit -a
+- 推分支不會自己跑 CI，要 `gh workflow run CI --ref 分支`；同分支新的會取消舊的
