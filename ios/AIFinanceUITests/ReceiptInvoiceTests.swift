@@ -40,10 +40,19 @@ final class ReceiptInvoiceTests: XCTestCase {
         return app.buttons.containing(NSPredicate(format: format, argumentArray: fragments)).firstMatch
     }
 
+    /// 記一筆是常駐的分頁：點分頁列的「記一筆」，等「記下」出現。
     private func openEntry() {
-        XCTAssertTrue(app.buttons["addButton"].waitForExistence(timeout: 30))
-        app.buttons["addButton"].tap()
+        let tab = app.buttons["tab_記一筆"]
+        XCTAssertTrue(tab.waitForExistence(timeout: 30))
+        tab.tap()
         XCTAssertTrue(app.buttons["entrySave"].waitForExistence(timeout: 30))
+    }
+
+    /// 開 app 停在記一筆；要點明細上的一列，先點分頁列的「明細」。
+    private func showLedger() {
+        let tab = app.buttons["tab_明細"]
+        XCTAssertTrue(tab.waitForExistence(timeout: 30))
+        tab.tap()
     }
 
     private func disappears(_ element: XCUIElement, timeout: TimeInterval = 10) -> Bool {
@@ -73,7 +82,9 @@ final class ReceiptInvoiceTests: XCTestCase {
         // 日期填的是上個月，提示才不會講「這個月共」。
         XCTAssertTrue(wait("toastText", contains: "記好了。飲食 NT$110"), "日期要填發票那天")
 
+        // 記下之後留在記一筆、表單清空，直接再掃一次。
         openEntry()
+        XCTAssertFalse(any("entryAmount").label.contains("110"), "記下之後金額清空")
         app.buttons["scanInvoice"].tap()
         let alert = app.alerts["這張發票記過了"]
         XCTAssertTrue(alert.waitForExistence(timeout: 10))
@@ -95,6 +106,7 @@ final class ReceiptInvoiceTests: XCTestCase {
         app.launchArguments += ["-demo", "fresh"]
         app.launch()
 
+        showLedger()
         XCTAssertTrue(row("便當", "NT$120").waitForExistence(timeout: 30))
         row("便當", "NT$120").tap()
         XCTAssertTrue(app.buttons["entryDelete"].waitForExistence(timeout: 30))

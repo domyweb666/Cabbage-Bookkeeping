@@ -2,7 +2,7 @@ import FinanceCore
 import SwiftUI
 import UIKit
 
-/// 記帳分頁：月份、本月支出、每天的明細、底部一顆「記一筆」。
+/// 明細分頁：月份、本月支出、每天的明細。記一筆在自己的分頁（2026-11-26 起），這頁不再放那顆按鈕。
 /// 有兩本以上的帳時，月份旁邊多一顆換帳本；有在存錢時，總額卡下面多一條存錢。
 struct LedgerView: View {
     @Environment(LedgerModel.self) private var model
@@ -10,7 +10,6 @@ struct LedgerView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     @State private var editing: Txn?
-    @State private var showNew = false
     @State private var showBudget = false
     @State private var showNewLedger = false
     @State private var showSavings = false
@@ -39,48 +38,16 @@ struct LedgerView: View {
             }
         }
         .background(Theme.background.ignoresSafeArea())
+        // 刪一筆、改一筆後的提示條（含復原）。沒有提示條時不佔位置。
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            VStack(spacing: Gap.group) {
-                ToastSlot()
-                Button {
-                    model.refreshToday()
-                    showNew = true
-                } label: {
-                    Label(Words.Ledger.add, systemImage: "plus")
-                        .frame(maxWidth: .infinity, minHeight: Metric.button)
-                        .primaryFill()
-                        .clipShape(Capsule())
-                }
-                .buttonStyle(.press)
-                .disabled(model.loadFailed)
-                .accessibilityIdentifier("addButton")
-            }
-            .padding(.horizontal, Gap.screenMargin)
-            .padding(.vertical, Gap.group)
-            .background(Theme.background)
+            ToastSlot()
+                .padding(.horizontal, Gap.screenMargin)
+                .padding(.bottom, Gap.group)
         }
-        .sheet(isPresented: $showNew) { EntrySheet(mode: .new) }
         .sheet(item: $editing) { EntrySheet(mode: .edit($0)) }
         .sheet(isPresented: $showBudget) { BudgetSheet() }
         .sheet(isPresented: $showNewLedger) { LedgerEditView(ledger: nil) }
         .sheet(isPresented: $showSavings) { savingsSheet }
-        .onAppear { openRequestedEntry() }
-        .onChange(of: EntryRequest.shared.pending) { _, _ in openRequestedEntry() }
-    }
-
-    /// 從小工具或控制中心來的「記一筆」。正在做別的就不打斷。
-    private func openRequestedEntry() {
-        guard EntryRequest.shared.pending else { return }
-        EntryRequest.shared.pending = false
-        guard !model.loadFailed, !showNew, !Self.isPresentingSomething else { return }
-        model.refreshToday()
-        showNew = true
-    }
-
-    private static var isPresentingSomething: Bool {
-        UIApplication.shared.connectedScenes
-            .compactMap { ($0 as? UIWindowScene)?.keyWindow?.rootViewController?.presentedViewController }
-            .first != nil
     }
 
     /// 現在是哪個月。固定在上面，總額那張卡跟著捲。兩本以上時右邊是換帳本那顆，字放大排不下就放到下一排。

@@ -1,14 +1,18 @@
 import SwiftUI
 
-/// 三個分頁。順序照多米 2026-11-26（QC-0015）：設定－記帳－分析，記帳在中間、開 app 先看到。
+/// 四個分頁：設定－記一筆－明細－分析。
+/// 多米 2026-11-26 晚上：記一筆要自己一頁、開 app 就停在這頁能記，不用先按一下再跳出來。
+/// 原本的「記帳」頁（月份、總額、每天的明細）改叫明細。
 enum Page: Hashable, CaseIterable {
     case settings
+    case entry
     case ledger
     case analysis
 
     var label: String {
         switch self {
         case .settings: Words.Tab.settings
+        case .entry: Words.Tab.entry
         case .ledger: Words.Tab.ledger
         case .analysis: Words.Tab.analysis
         }
@@ -17,6 +21,7 @@ enum Page: Hashable, CaseIterable {
     var icon: String {
         switch self {
         case .settings: "gearshape.fill"
+        case .entry: "plus.circle.fill"
         case .ledger: "list.bullet"
         case .analysis: "chart.bar.fill"
         }
@@ -24,7 +29,7 @@ enum Page: Hashable, CaseIterable {
 }
 
 extension EnvironmentValues {
-    /// 這一頁是不是現在選中的分頁。三頁常駐，藏起來的頁用它關掉只該出現一次的東西（提示條）。
+    /// 這一頁是不是現在選中的分頁。分頁常駐，藏起來的頁用它關掉只該出現一次的東西（提示條）。
     @Entry var isCurrentPage = true
     /// 懸浮分頁列上緣在螢幕上的位置（global 座標）。還沒量到是無限大，什麼都不墊。
     @Entry var tabBarTop: CGFloat = .infinity

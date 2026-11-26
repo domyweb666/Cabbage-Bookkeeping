@@ -55,10 +55,27 @@ final class AIFinanceUITests: XCTestCase {
         return XCTWaiter.wait(for: [expectation], timeout: timeout) == .completed
     }
 
+    /// 記一筆是常駐的分頁：點分頁列的「記一筆」，等「記下」出現。
     private func openEntry() {
-        XCTAssertTrue(app.buttons["addButton"].waitForExistence(timeout: 30))
-        app.buttons["addButton"].tap()
+        let tab = app.buttons["tab_記一筆"]
+        XCTAssertTrue(tab.waitForExistence(timeout: 30))
+        tab.tap()
         XCTAssertTrue(app.buttons["entrySave"].waitForExistence(timeout: 30))
+    }
+
+    /// 開 app 停在記一筆；要看月份、總額卡、每天的明細，先點分頁列的「明細」。
+    private func showLedger() {
+        let tab = app.buttons["tab_明細"]
+        XCTAssertTrue(tab.waitForExistence(timeout: 30))
+        tab.tap()
+    }
+
+    /// 按「記下」之後留在記一筆，表單清回空白。
+    private func entryIsBlank() {
+        XCTAssertTrue(app.buttons["entrySave"].exists, "記下之後要留在記一筆")
+        let zero = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label == %@", "0"), object: any("entryAmount"))
+        XCTAssertEqual(XCTWaiter.wait(for: [zero], timeout: 10), .completed, "記下之後金額回到 0")
+        XCTAssertFalse(app.buttons["entrySave"].isEnabled, "記下之後分類也清掉，不能再按一次")
     }
 
     private func press(_ keys: String...) {
@@ -81,7 +98,10 @@ final class AIFinanceUITests: XCTestCase {
 
     /// 記一筆的分類卡捲到底。三排以外的格子要捲才會出現。
     private func scrollCategories() {
-        let start = app.buttons["category_居住"].coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+        let anchor = app.buttons["category_居住"]
+        // 記一筆是常駐分頁，格子會停在上次捲到的地方；居住已經捲出畫面，就是已經在底了。
+        guard anchor.exists, anchor.isHittable else { return }
+        let start = anchor.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
         start.press(forDuration: 0.05, thenDragTo: start.withOffset(CGVector(dx: 0, dy: -200)))
     }
 
@@ -100,7 +120,7 @@ final class AIFinanceUITests: XCTestCase {
     }
 
     private func openCategoriesFromSettings() {
-        XCTAssertTrue(app.buttons["addButton"].waitForExistence(timeout: 30))
+        XCTAssertTrue(app.buttons["tab_設定"].waitForExistence(timeout: 30))
         app.buttons["tab_設定"].tap()
         let row = app.buttons["categoriesRow"]
         XCTAssertTrue(row.waitForExistence(timeout: 30))
@@ -157,11 +177,15 @@ final class AIFinanceUITests: XCTestCase {
 
     func testFirstEntryAndUndo() {
         launch()
+        // 開 app 就停在記一筆，不用先點分頁。
+        XCTAssertTrue(app.buttons["entrySave"].waitForExistence(timeout: 30), "開 app 要停在記一筆")
+        showLedger()
         XCTAssertTrue(shows("還沒有紀錄"))
         shot("01-首次開啟")
 
         openEntry()
         XCTAssertFalse(app.buttons["entrySave"].isEnabled, "還沒填金額和分類不能記")
+        XCTAssertFalse(app.buttons["entryClear"].exists, "還沒填東西不給清空")
         shot("02-記一筆-空白")
 
         press("1", "8", "8")
@@ -171,12 +195,18 @@ final class AIFinanceUITests: XCTestCase {
         settledShot("03-記一筆-填好")
         app.buttons["entrySave"].tap()
 
+        // 提示條出現在記一筆頁上，表單清回空白，人還留在記一筆。
         XCTAssertTrue(wait("toastText", contains: "記好了。飲食這個月共 NT$188"))
+        entryIsBlank()
+
+        showLedger()
         XCTAssertTrue(row("飲食", "NT$188").waitForExistence(timeout: 10))
         XCTAssertTrue(wait("monthTotal", contains: "NT$188"))
         shot("04-記好第一筆")
 
-        app.buttons["undoButton"].tap()
+        // 提示條跟著目前那頁走，切到明細也按得到復原。
+        XCTAssertTrue(app.buttons["undoButton"].firstMatch.waitForExistence(timeout: 10))
+        app.buttons["undoButton"].firstMatch.tap()
         XCTAssertTrue(shows("還沒有紀錄"))
     }
 
@@ -190,9 +220,15 @@ final class AIFinanceUITests: XCTestCase {
         shot("05-記收入")
         app.buttons["entrySave"].tap()
         XCTAssertTrue(wait("toastText", contains: "記好了。薪水 NT$42,000"))
+        entryIsBlank()
+        // 記完留在收入，格子還是收入的分類。
+        XCTAssertTrue(app.buttons["category_薪水"].exists, "記下之後支出收入維持原本選的")
+        showLedger()
         XCTAssertTrue(wait("monthTotal", contains: "NT$0"), "收入不算進本月支出")
 
         openEntry()
+        app.segmentedControls.buttons["支出"].firstMatch.tap()
+        XCTAssertTrue(app.buttons["category_交通"].waitForExistence(timeout: 10))
         press("5", "00")
         app.buttons["key_back"].tap()
         app.buttons["category_交通"].tap()
@@ -203,6 +239,8 @@ final class AIFinanceUITests: XCTestCase {
         app.buttons["完成"].firstMatch.tap()
         XCTAssertTrue(app.buttons["entrySave"].waitForExistence(timeout: 10))
         app.buttons["entrySave"].tap()
+        XCTAssertTrue(wait("toastText", contains: "記好了。交通"))
+        showLedger()
         XCTAssertTrue(row("加油", "交通", "NT$50").waitForExistence(timeout: 10))
     }
 
@@ -220,6 +258,7 @@ final class AIFinanceUITests: XCTestCase {
 
     func testEditAndDelete() {
         launch(demo: "fresh")
+        showLedger()
         XCTAssertTrue(row("便當", "NT$120").waitForExistence(timeout: 30))
         shot("07-明細")
         row("便當", "NT$120").tap()
@@ -242,21 +281,42 @@ final class AIFinanceUITests: XCTestCase {
         XCTAssertTrue(wait("monthTotal", contains: "NT$7,035"), "復原後要回來")
     }
 
+    /// 記一筆改成常駐分頁，沒有彈出來的畫面可以滑掉，這條改驗「改一筆」：
     /// 沒動過可以往下滑掉；勾了一次性就滑不掉，要按「取消」。
     func testTouchedEntryCannotBeSwipedAway() {
-        launch()
-        openEntry()
+        launch(demo: "fresh")
+        showLedger()
+        XCTAssertTrue(row("便當", "NT$120").waitForExistence(timeout: 30))
+        row("便當", "NT$120").tap()
+        XCTAssertTrue(app.buttons["entryDelete"].waitForExistence(timeout: 30))
         dragDown(from: any("entryAmount"))
-        XCTAssertTrue(disappears(app.buttons["entrySave"]), "沒動過可以滑掉")
+        XCTAssertTrue(disappears(app.buttons["entryDelete"]), "沒動過可以滑掉")
 
-        openEntry()
+        row("便當", "NT$120").tap()
+        XCTAssertTrue(app.buttons["entryDelete"].waitForExistence(timeout: 30))
         scrollTo(app.buttons["entryOneOff"])
         app.buttons["entryOneOff"].tap()
         XCTAssertTrue(app.buttons["entryOneOff"].isSelected)
         dragDown(from: any("entryAmount"))
-        XCTAssertFalse(disappears(app.buttons["entrySave"], timeout: 3), "勾了一次性就滑不掉")
+        XCTAssertFalse(disappears(app.buttons["entryDelete"], timeout: 3), "勾了一次性就滑不掉")
         app.buttons["entryCancel"].tap()
-        XCTAssertTrue(disappears(app.buttons["entrySave"]))
+        XCTAssertTrue(disappears(app.buttons["entryDelete"]))
+    }
+
+    /// 記一筆頁沒有「取消」：填了東西才出現「清空」，按了回到空白、人還在這頁。
+    func testClearEntry() {
+        launch()
+        openEntry()
+        XCTAssertFalse(app.buttons["entryCancel"].exists, "分頁上沒有取消")
+        XCTAssertFalse(app.buttons["entryClear"].exists, "沒填東西不給清空")
+        press("4", "5")
+        app.buttons["category_飲食"].tap()
+        XCTAssertTrue(app.buttons["entryClear"].waitForExistence(timeout: 10))
+        app.buttons["entryClear"].tap()
+        entryIsBlank()
+        XCTAssertTrue(disappears(app.buttons["entryClear"]), "清空之後按鈕收起來")
+        showLedger()
+        XCTAssertTrue(shows("還沒有紀錄"), "清空不會記下任何東西")
     }
 
     // MARK: - 分析
@@ -271,6 +331,7 @@ final class AIFinanceUITests: XCTestCase {
 
     func testAnalysisWithObservation() {
         launch(demo: "steady")
+        showLedger()
         XCTAssertTrue(wait("monthTotal", contains: "NT$"))
         shot("10-明細-有預算")
         openAnalysis()
@@ -316,7 +377,7 @@ final class AIFinanceUITests: XCTestCase {
         XCTAssertTrue(wait("comparisonText", contains: "平常到 25 號是"))
         XCTAssertFalse(app.buttons["estimateButton"].exists)
         shot("38-分析-補完")
-        app.buttons["tab_記帳"].tap()
+        showLedger()
         XCTAssertTrue(any("monthTotal").waitForExistence(timeout: 30))
         shot("39-明細-大概")
         app.buttons["undoButton"].firstMatch.tap()
@@ -345,13 +406,14 @@ final class AIFinanceUITests: XCTestCase {
         shot("18-訂預算")
         app.buttons["budgetSave"].tap()
         XCTAssertTrue(wait("budgetButton", contains: "預算還剩 NT$2,995，每天 NT$499。"))
-        app.buttons["tab_記帳"].tap()
+        showLedger()
         XCTAssertTrue(wait("monthTotal", contains: "還能花 NT$2,995"))
     }
 
-    /// 沒訂預算時，記帳頁就有入口；訂預算的畫面連得到固定支出。
+    /// 沒訂預算時，明細頁就有入口；訂預算的畫面連得到固定支出。
     func testBudgetFromLedger() {
         launch(demo: "fresh")
+        showLedger()
         XCTAssertTrue(app.buttons["homeBudgetButton"].waitForExistence(timeout: 30))
         shot("40-明細-還沒訂預算")
         app.buttons["homeBudgetButton"].tap()
@@ -374,7 +436,7 @@ final class AIFinanceUITests: XCTestCase {
     // MARK: - 固定支出
 
     private func openFixed() {
-        XCTAssertTrue(app.buttons["addButton"].waitForExistence(timeout: 30))
+        XCTAssertTrue(app.buttons["tab_設定"].waitForExistence(timeout: 30))
         app.buttons["tab_設定"].tap()
         XCTAssertTrue(app.buttons["fixedRow"].waitForExistence(timeout: 30))
         app.buttons["fixedRow"].tap()
@@ -384,6 +446,7 @@ final class AIFinanceUITests: XCTestCase {
     func testPlannedFigures() {
         launch(demo: "planned")
         XCTAssertTrue(wait("toastText", contains: "記好了。停車月租 NT$1,500"), "到期的打開就記好")
+        showLedger()
         XCTAssertTrue(wait("monthTotal", contains: "NT$24,590"))
         XCTAssertTrue(wait("monthTotal", contains: "還能花 NT$8,511"))
         shot("43-明細-先扣固定支出")
@@ -446,6 +509,7 @@ final class AIFinanceUITests: XCTestCase {
 
         app.terminate()
         app.launch()
+        showLedger()
         XCTAssertTrue(row("水費", "NT$500").waitForExistence(timeout: 30), "今天到期的記了一筆，重開還在")
         XCTAssertTrue(wait("monthTotal", contains: "NT$500"), "重開不會再記一次")
         openFixed()
@@ -477,7 +541,7 @@ final class AIFinanceUITests: XCTestCase {
 
     func testSettingsAndDeleteAll() {
         launch(demo: "fresh")
-        XCTAssertTrue(app.buttons["addButton"].waitForExistence(timeout: 30))
+        XCTAssertTrue(app.buttons["tab_設定"].waitForExistence(timeout: 30))
         app.buttons["tab_設定"].tap()
         XCTAssertTrue(app.buttons["deleteAllButton"].waitForExistence(timeout: 30))
         XCTAssertTrue(app.switches["觸覺回饋"].firstMatch.exists)
@@ -507,7 +571,7 @@ final class AIFinanceUITests: XCTestCase {
         app.alerts.buttons["全部刪除"].tap()
         XCTAssertTrue(app.alerts.buttons["好"].waitForExistence(timeout: 10))
         app.alerts.buttons["好"].tap()
-        app.buttons["tab_記帳"].tap()
+        showLedger()
         XCTAssertTrue(shows("還沒有紀錄"))
     }
 
@@ -518,10 +582,12 @@ final class AIFinanceUITests: XCTestCase {
         press("7", "7")
         app.buttons["category_娛樂"].tap()
         app.buttons["entrySave"].tap()
+        showLedger()
         XCTAssertTrue(row("娛樂", "NT$77").waitForExistence(timeout: 30))
 
         app.terminate()
         app.launch()
+        showLedger()
         XCTAssertTrue(row("娛樂", "NT$77").waitForExistence(timeout: 30), "重開之後紀錄要還在")
         XCTAssertTrue(wait("monthTotal", contains: "NT$77"))
     }
@@ -542,6 +608,7 @@ final class AIFinanceUITests: XCTestCase {
         app.buttons["category_早餐"].tap()
         settledShot("29-記一筆-多一格")
         app.buttons["entrySave"].tap()
+        showLedger()
         XCTAssertTrue(row("早餐", "NT$88").waitForExistence(timeout: 30))
 
         openEntry()
@@ -556,7 +623,10 @@ final class AIFinanceUITests: XCTestCase {
         scrollCategories()
         XCTAssertFalse(app.buttons["category_早餐"].exists, "取消勾選後格子就沒有")
         XCTAssertFalse(app.buttons["entrySave"].isEnabled, "選好的分類不顯示了，就當作還沒選")
-        app.buttons["entryCancel"].tap()
+        // 金額還在，按「清空」放掉這筆，再去明細看舊紀錄。
+        XCTAssertTrue(app.buttons["entryClear"].waitForExistence(timeout: 10))
+        app.buttons["entryClear"].tap()
+        showLedger()
 
         XCTAssertTrue(row("早餐", "NT$88").waitForExistence(timeout: 10), "記過的不受影響")
         row("早餐", "NT$88").tap()
@@ -589,14 +659,15 @@ final class AIFinanceUITests: XCTestCase {
         press("1", "2", "0")
         app.buttons["category_貓咪"].tap()
         app.buttons["entrySave"].tap()
+        showLedger()
         XCTAssertTrue(row("貓咪", "NT$120").waitForExistence(timeout: 30))
 
         app.terminate()
         app.launch()
+        showLedger()
         XCTAssertTrue(row("貓咪", "NT$120").waitForExistence(timeout: 30), "重開之後紀錄和名字都要還在")
         openEntry()
         XCTAssertTrue(lateCategory("貓咪").waitForExistence(timeout: 10), "重開之後分類要還在")
-        app.buttons["entryCancel"].tap()
 
         openCategoriesFromSettings()
         editCategory("貓咪")
@@ -605,7 +676,7 @@ final class AIFinanceUITests: XCTestCase {
         app.buttons["categoryDelete"].tap()
         XCTAssertTrue(app.alerts.buttons["刪除這個分類"].waitForExistence(timeout: 10))
         app.alerts.buttons["刪除這個分類"].tap()
-        app.buttons["tab_記帳"].tap()
+        showLedger()
         XCTAssertTrue(row("貓咪", "NT$120").waitForExistence(timeout: 10), "刪掉分類，記過的照樣看得到名字")
         openEntry()
         scrollCategories()
@@ -642,12 +713,11 @@ final class AIFinanceUITests: XCTestCase {
         XCTAssertTrue(app.buttons["pick_吃飯"].waitForExistence(timeout: 10))
         shot("31-常用分類-改過")
 
-        app.buttons["tab_記帳"].tap()
+        showLedger()
         XCTAssertTrue(row("便當", "吃飯", "NT$120").waitForExistence(timeout: 10), "明細跟著改")
         openEntry()
         XCTAssertTrue(app.buttons["category_吃飯"].waitForExistence(timeout: 10))
         shot("32-記一筆-改過名字")
-        app.buttons["entryCancel"].tap()
         openAnalysis()
         scrollTo(any("line_吃飯"))
     }
@@ -736,12 +806,14 @@ final class AIFinanceUITests: XCTestCase {
 
     func testDarkMode() {
         launch(demo: "steady", extra: ["-forceDark"])
-        XCTAssertTrue(app.buttons["addButton"].waitForExistence(timeout: 30))
+        showLedger()
+        XCTAssertTrue(any("monthTotal").waitForExistence(timeout: 30))
         shot("21-深色-明細")
         openEntry()
         app.buttons["category_飲食"].tap()
         settledShot("22-深色-記一筆")
-        app.buttons["entryCancel"].tap()
+        XCTAssertTrue(app.buttons["entryClear"].waitForExistence(timeout: 10))
+        app.buttons["entryClear"].tap()
         openAnalysis()
         shot("23-深色-分析")
         app.swipeUp()
@@ -750,12 +822,14 @@ final class AIFinanceUITests: XCTestCase {
 
     func testLargeText() {
         launch(demo: "steady", extra: ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityL"])
-        XCTAssertTrue(app.buttons["addButton"].waitForExistence(timeout: 30))
+        showLedger()
+        XCTAssertTrue(any("monthTotal").waitForExistence(timeout: 30))
         shot("25-大字-明細")
         openEntry()
         press("1", "2")
         shot("26-大字-記一筆")
-        app.buttons["entryCancel"].tap()
+        XCTAssertTrue(app.buttons["entryClear"].waitForExistence(timeout: 10))
+        app.buttons["entryClear"].tap()
         openAnalysis()
         shot("27-大字-分析")
     }

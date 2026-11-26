@@ -75,18 +75,22 @@ struct AIFinanceApp: App {
     }
 }
 
-/// 三個分頁：設定、記帳、分析。分頁列自己畫（DesignSystem/TabBar.swift），三頁都留著，切過去狀態還在。
+/// 四個分頁：設定、記一筆、明細、分析，開 app 停在記一筆。分頁列自己畫（DesignSystem/TabBar.swift），
+/// 前三頁都留著，切過去狀態還在（記一筆填到一半切走再回來，數字還在）。
 private struct RootView: View {
     @Environment(LedgerModel.self) private var model
     @Environment(\.scenePhase) private var scenePhase
 
-    @State private var page: Page = .ledger
+    @State private var page: Page = .entry
+    /// 打備註時鍵盤升起來，分頁列先收起來，不然會被頂到鍵盤上面、擠掉備註欄。
+    @State private var keyboardUp = false
     /// 分頁列上緣，給設定頁推進去的子頁面把底部按鈕墊高（aboveTabBar）。
     @State private var tabBarTop: CGFloat = .infinity
 
     var body: some View {
         ZStack {
             tab(.settings) { SettingsView() }
+            tab(.entry) { EntrySheet(mode: .page) }
             tab(.ledger) { LedgerView() }
             // 分析頁每次記帳都會重算報表，沒選中就不放進畫面，切過來才建（它的 onAppear 會順便更新今天）。
             if page == .analysis {
@@ -95,8 +99,16 @@ private struct RootView: View {
         }
         .environment(\.tabBarTop, tabBarTop)
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            TabBar(page: $page)
-                .onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).minY } action: { tabBarTop = $0 }
+            if !keyboardUp {
+                TabBar(page: $page)
+                    .onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).minY } action: { tabBarTop = $0 }
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
+            keyboardUp = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
+            keyboardUp = false
         }
         .onAppear(perform: openEntryIfAsked)
         .onChange(of: EntryRequest.shared.asked) { _, asked in
@@ -107,7 +119,7 @@ private struct RootView: View {
         }
     }
 
-    /// 設定、記帳沒選中時藏起來、不給點、讀螢幕也略過，但不拆掉，記帳頁開著的畫面和捲動位置才留得住。
+    /// 設定、記一筆、明細沒選中時藏起來、不給點、讀螢幕也略過，但不拆掉，填到一半的數字和捲動位置才留得住。
     private func tab(_ which: Page, @ViewBuilder content: () -> some View) -> some View {
         let isOn = page == which
         return content()
@@ -117,14 +129,13 @@ private struct RootView: View {
             .accessibilityHidden(!isOn)
     }
 
-    /// 小工具或控制中心要求記一筆。已經有別的畫面開著就不打斷，免得填到一半的不見。
+    /// 小工具或控制中心要求記一筆：切到記一筆分頁。已經有別的畫面開著就不打斷，免得填到一半的不見。
     private func openEntryIfAsked() {
         let request = EntryRequest.shared
         guard request.asked else { return }
         request.asked = false
         guard !hasPresentedScreen else { return }
-        page = .ledger
-        request.pending = true
+        page = .entry
     }
 
     private var hasPresentedScreen: Bool {

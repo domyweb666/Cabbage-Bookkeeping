@@ -61,10 +61,18 @@ final class LedgersSavingsTests: XCTestCase {
         for key in keys { app.buttons["key_\(key)"].tap() }
     }
 
-    /// 記一筆支出或收入。
+    /// 開 app 停在記一筆；要看月份、總額卡、換帳本、存錢那一條，先點分頁列的「明細」。
+    private func showLedger() {
+        let tab = app.buttons["tab_明細"]
+        XCTAssertTrue(tab.waitForExistence(timeout: 30))
+        tab.tap()
+    }
+
+    /// 到記一筆分頁記一筆支出或收入，記好回明細看。
     private func record(_ keys: [String], category: String, income: Bool = false) {
-        XCTAssertTrue(app.buttons["addButton"].waitForExistence(timeout: 30))
-        app.buttons["addButton"].tap()
+        let tab = app.buttons["tab_記一筆"]
+        XCTAssertTrue(tab.waitForExistence(timeout: 30))
+        tab.tap()
         XCTAssertTrue(app.buttons["entrySave"].waitForExistence(timeout: 30))
         if income {
             app.buttons["收入"].tap()
@@ -73,6 +81,8 @@ final class LedgersSavingsTests: XCTestCase {
         for key in keys { press(key) }
         app.buttons["category_\(category)"].tap()
         app.buttons["entrySave"].tap()
+        XCTAssertTrue(wait("toastText", contains: "記好了"))
+        showLedger()
     }
 
     /// 選單裡的一本（標題開頭是帳本名，後面可能接這個月的金額）。
@@ -81,7 +91,7 @@ final class LedgersSavingsTests: XCTestCase {
     }
 
     private func openLedgers() {
-        XCTAssertTrue(app.buttons["addButton"].waitForExistence(timeout: 30))
+        XCTAssertTrue(app.buttons["tab_設定"].waitForExistence(timeout: 30))
         app.buttons["tab_設定"].tap()
         let entry = app.buttons["ledgersRow"]
         XCTAssertTrue(entry.waitForExistence(timeout: 30))
@@ -107,7 +117,7 @@ final class LedgersSavingsTests: XCTestCase {
 
     // MARK: - 多帳本
 
-    /// 只有一本時記帳頁跟以前一樣；新增第二本、換過去、記的只在那本；換回來看不到。
+    /// 只有一本時明細頁跟以前一樣；新增第二本、換過去、記的只在那本；換回來看不到。
     func testSecondLedgerKeepsItsOwnRecords() {
         launch()
         record(["1", "8", "8"], category: "飲食")
@@ -122,7 +132,7 @@ final class LedgersSavingsTests: XCTestCase {
         XCTAssertTrue(any("ledgerRow_我的帳本").exists)
         shot("82-帳本清單-兩本")
 
-        app.buttons["tab_記帳"].tap()
+        showLedger()
         XCTAssertTrue(app.buttons["ledgerChip"].waitForExistence(timeout: 30))
         XCTAssertTrue(wait("ledgerChip", contains: "旅行"))
         XCTAssertTrue(shows("還沒有紀錄"), "新的一本是空的")
@@ -147,10 +157,10 @@ final class LedgersSavingsTests: XCTestCase {
 
     // MARK: - 存錢
 
-    /// 從設定開始存錢；還沒有收入時說怎麼開始算；記一筆收入後記帳頁那一條跟著變。
+    /// 從設定開始存錢；還沒有收入時說怎麼開始算；記一筆收入後明細頁那一條跟著變。
     func testSavingsGoalFollowsIncome() {
         launch()
-        XCTAssertTrue(app.buttons["addButton"].waitForExistence(timeout: 30))
+        XCTAssertTrue(app.buttons["tab_設定"].waitForExistence(timeout: 30))
         app.buttons["tab_設定"].tap()
         let entry = app.buttons["savingsRow"]
         XCTAssertTrue(entry.waitForExistence(timeout: 30))
@@ -172,7 +182,7 @@ final class LedgersSavingsTests: XCTestCase {
         XCTAssertTrue(wait("savingsHeadline", contains: "記一筆收入就會開始算"))
         shot("86-存錢頁-還沒有收入")
 
-        app.buttons["tab_記帳"].tap()
+        showLedger()
         XCTAssertTrue(wait("savingsBar", contains: "記一筆收入就會開始算"))
 
         record(["5", "00", "0"], category: "薪水", income: true)
@@ -184,7 +194,8 @@ final class LedgersSavingsTests: XCTestCase {
         XCTAssertTrue(any("savingsPlan").exists)
         shot("88-存錢頁")
         app.buttons["savingsDone"].tap()
-        XCTAssertTrue(app.buttons["addButton"].waitForExistence(timeout: 30))
+        XCTAssertTrue(disappears(app.buttons["savingsDone"], timeout: 30))
+        XCTAssertTrue(any("savingsBar").waitForExistence(timeout: 30), "存錢頁關掉回到明細")
     }
 
     // MARK: - 深色、大字
@@ -194,7 +205,7 @@ final class LedgersSavingsTests: XCTestCase {
         openLedgers()
         addLedger("工作室")
         shot("89-深色-帳本清單")
-        app.buttons["tab_記帳"].tap()
+        showLedger()
         XCTAssertTrue(app.buttons["ledgerChip"].waitForExistence(timeout: 30))
         app.buttons["ledgerChip"].tap()
         XCTAssertTrue(menuItem("我的帳本").waitForExistence(timeout: 10))
@@ -206,7 +217,7 @@ final class LedgersSavingsTests: XCTestCase {
         openLedgers()
         addLedger("旅行")
         shot("91-大字-帳本清單")
-        app.buttons["tab_記帳"].tap()
+        showLedger()
         XCTAssertTrue(app.buttons["ledgerChip"].waitForExistence(timeout: 30))
         shot("92-大字-記帳頁換帳本")
     }
