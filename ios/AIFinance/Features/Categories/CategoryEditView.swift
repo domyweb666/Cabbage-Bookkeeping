@@ -9,7 +9,7 @@ struct CategoryTarget: Hashable, Identifiable {
     var id: String { category?.id.uuidString ?? "new" }
 }
 
-/// 新增分類、改名字與圖示。順序也可以在這裡一格一格移，不用拖。
+/// 新增分類、改名字與圖示。不提供排序（多米 2026-11-26 QC-0015）。
 /// 按「存分類」才一次存，按「取消」就當作沒動過。
 struct CategoryEditView: View {
     @Environment(LedgerModel.self) private var model
@@ -18,8 +18,6 @@ struct CategoryEditView: View {
     private let target: CategoryTarget
     @State private var name: String
     @State private var icon: String
-    /// 往前（負）或往後（正）移了幾格，還沒存。
-    @State private var moved = 0
     @State private var saveFailed = false
     @State private var confirmDelete = false
 
@@ -38,7 +36,7 @@ struct CategoryEditView: View {
 
     /// 動過的內容不給滑掉，要走就按「取消」。
     private var isDirty: Bool {
-        name != (target.category?.name ?? "") || icon != (target.category?.icon ?? Categories.icons[0]) || moved != 0
+        name != (target.category?.name ?? "") || icon != (target.category?.icon ?? Categories.icons[0])
     }
 
     private var problem: CategoryNameProblem? {
@@ -65,7 +63,6 @@ struct CategoryEditView: View {
     var body: some View {
         List {
             nameSection
-            if let id = categoryID, model.book.isShown(id) { orderSection(id) }
             iconSection
             if let id = categoryID, let builtIn, model.book.isRenamed(id) { restoreSection(builtIn) }
             if isCustom { deleteSection }
@@ -122,20 +119,6 @@ struct CategoryEditView: View {
                     .foregroundStyle(Theme.secondaryText)
                     .accessibilityIdentifier("cardBillHint")
             }
-        }
-    }
-
-    /// 拖曳以外的另一條路，放在圖示前面才找得到。
-    private func orderSection(_ id: UUID) -> some View {
-        Section {
-            Button(Words.CategoryEdit.moveUp) { moved -= 1 }
-                .disabled(!model.book.canShift(id, by: moved - 1))
-                .accessibilityIdentifier("categoryMoveUp")
-            Button(Words.CategoryEdit.moveDown) { moved += 1 }
-                .disabled(!model.book.canShift(id, by: moved + 1))
-                .accessibilityIdentifier("categoryMoveDown")
-        } header: {
-            header(Words.CategoryEdit.orderSection)
         }
     }
 
@@ -204,7 +187,7 @@ struct CategoryEditView: View {
     private func save() {
         guard problem == nil else { return }
         let saved = model.changeBook { book in
-            if let id = categoryID { return book.edit(id, name: name, icon: icon, moved: moved) }
+            if let id = categoryID { return book.edit(id, name: name, icon: icon, moved: 0) }
             return book.add(name, icon: icon, kind: target.kind, at: Date())
         }
         guard saved else {

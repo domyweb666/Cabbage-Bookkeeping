@@ -54,31 +54,23 @@ struct AIFinanceApp: App {
     }
 }
 
-/// 三個分頁：記帳、分析、設定。
+/// 三個分頁：設定、記帳、分析。分頁列自己畫（DesignSystem/TabBar.swift），三頁都留著，切過去狀態還在。
 private struct RootView: View {
     @Environment(LedgerModel.self) private var model
     @Environment(\.scenePhase) private var scenePhase
 
-    private enum Page: Hashable {
-        case ledger
-        case analysis
-        case settings
-    }
-
     @State private var page: Page = .ledger
 
     var body: some View {
-        TabView(selection: $page) {
-            LedgerView()
-                .tabItem { Label(Words.Tab.ledger, systemImage: "list.bullet") }
-                .tag(Page.ledger)
-            AnalysisView()
-                .tabItem { Label(Words.Tab.analysis, systemImage: "chart.bar.fill") }
-                .tag(Page.analysis)
-            SettingsView()
-                .tabItem { Label(Words.Tab.settings, systemImage: "gearshape.fill") }
-                .tag(Page.settings)
+        ZStack {
+            tab(.settings) { SettingsView() }
+            tab(.ledger) { LedgerView() }
+            // 分析頁每次記帳都會重算報表，沒選中就不放進畫面，切過來才建（它的 onAppear 會順便更新今天）。
+            if page == .analysis {
+                tab(.analysis) { AnalysisView() }
+            }
         }
+        .safeAreaInset(edge: .bottom, spacing: 0) { TabBar(page: $page) }
         .onAppear(perform: openEntryIfAsked)
         .onChange(of: EntryRequest.shared.asked) { _, asked in
             if asked { openEntryIfAsked() }
@@ -86,6 +78,16 @@ private struct RootView: View {
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { model.refreshToday() }
         }
+    }
+
+    /// 設定、記帳沒選中時藏起來、不給點、讀螢幕也略過，但不拆掉，記帳頁開著的畫面和捲動位置才留得住。
+    private func tab(_ which: Page, @ViewBuilder content: () -> some View) -> some View {
+        let isOn = page == which
+        return content()
+            .environment(\.isCurrentPage, isOn)
+            .opacity(isOn ? 1 : 0)
+            .allowsHitTesting(isOn)
+            .accessibilityHidden(!isOn)
     }
 
     /// 小工具或控制中心要求記一筆。已經有別的畫面開著就不打斷，免得填到一半的不見。
