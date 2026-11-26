@@ -271,18 +271,37 @@ struct EntrySheet: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
+            noteField
+        }
+    }
+
+    /// 備註：前面一支筆、裡面看分類問一句，看起來是「等你寫一句」而不是「可以跳過」。
+    /// 點到整塊都會開鍵盤；寫了字，筆變實心。
+    private var noteField: some View {
+        HStack(spacing: Gap.item) {
+            Image(systemName: note.isEmpty ? "pencil.line" : "pencil")
+                .font(Typo.body.font.weight(.semibold))
+                .foregroundStyle(Theme.accent)
+                .dynamicTypeSize(...DynamicTypeSize.xxLarge)
+                .accessibilityHidden(true)
             TextField(
                 Words.Entry.note, text: $note,
-                prompt: Text(Words.Entry.note).foregroundStyle(Theme.secondaryText)
+                prompt: Text(Words.Entry.notePrompt(model.book.find(categoryId))).foregroundStyle(Theme.secondaryText)
             )
                 .focused($noteFocused)
                 .submitLabel(.done)
                 .onSubmit { noteFocused = false }
-                .padding(.horizontal, Gap.cardPad)
-                .frame(minHeight: Metric.field)
-                .background(Theme.card, in: RoundedRectangle(cornerRadius: Theme.keyRadius, style: .continuous))
                 .accessibilityIdentifier("entryNote")
         }
+        .padding(.horizontal, Gap.cardPad)
+        .frame(minHeight: Metric.field)
+        .background(Theme.card, in: RoundedRectangle(cornerRadius: Theme.keyRadius, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: Theme.keyRadius, style: .continuous)
+                .strokeBorder(noteFocused ? Theme.accent : .clear, lineWidth: Metric.hairline * 1.5)
+        }
+        .contentShape(Rectangle())
+        .onTapGesture { noteFocused = true }
     }
 
     private var datePicker: some View {

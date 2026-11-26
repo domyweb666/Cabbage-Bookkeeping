@@ -69,7 +69,20 @@ enum Words {
         static let save = "記下"
         static let backspace = "退格"
         static let date = "日期"
-        static let note = "備註，可以不填"
+        static let note = "備註"
+
+        /// 備註欄裡的問句：看分類問一句，讓人順手回答。不寫「可以不填」（多米 2026-11-26 QC-0015 #126）。
+        static func notePrompt(_ category: TxCategory?) -> String {
+            guard let category else { return "這筆是什麼？" }
+            switch category.tint {
+            case .food: return "吃了什麼？"
+            case .transport: return "去哪裡？"
+            case .home: return "家裡用在哪？"
+            case .shopping: return "買了什麼？"
+            case .other: return "這筆花在哪？"
+            case .income: return "哪裡來的？"
+            }
+        }
         static let oneOffOn = "一次性，不跟平常比"
         static let delete = "刪除"
         static let deleteTitle = "刪除這筆紀錄？"
@@ -85,12 +98,10 @@ enum Words {
     enum Categories {
         static let title = "常用分類"
         static let shown = "顯示中"
-        static let hint = "勾起來的會出現在記一筆的畫面。按住右邊的把手可以拖著排。取消勾選不會動到已經記的。"
+        static let hint = "有顏色的會出現在記一筆，點一下放進去或拿出來。按住一格可以改名字和圖示。拿出來不會動到已經記的。"
         static let keepOne = "至少留一個。"
         static let add = "新增分類"
         static let reset = "恢復預設"
-        static let moveUp = "上移"
-        static let moveDown = "下移"
 
         static func edit(_ name: String) -> String { "編輯\(name)" }
         static func resetTitle(_ kind: TxType) -> String { "\(kind.label)分類恢復預設？" }
@@ -106,9 +117,6 @@ enum Words {
         static let nameSection = "名字"
         static let namePrompt = "1 到 8 個字"
         static let iconSection = "圖示"
-        static let orderSection = "順序"
-        static let moveUp = "往前移一格"
-        static let moveDown = "往後移一格"
         static let restore = "恢復原本的名字與圖示"
         static let delete = "刪除這個分類"
         static let deleteMessage = "記過的紀錄還在，也照樣看得到這個名字，以後不能再選。"

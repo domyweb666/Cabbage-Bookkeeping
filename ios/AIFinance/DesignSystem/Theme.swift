@@ -16,6 +16,8 @@ enum Theme {
     static let onAccent = DomyTheme.plum.onAccent
     /// 卡片上要跳出來的數字。
     static let accentStrong = DomyTheme.plum.strong
+    /// 分頁列選中那格的淡底。
+    static let accentSoft = DomyTheme.plum.soft
 
     // 中性色。
     static let card = DomyTokens.Neutral.surface
@@ -55,7 +57,7 @@ enum Theme {
     /// 分類色塊。
     static let badgeRadius = DomyTokens.Radius.md
     static let keyRadius = DomyTokens.Radius.lg
-    /// 捲到底的留白。系統分頁列自己會讓位，不用 bottomClear。
+    /// 捲到底的留白。分頁列用 safeAreaInset 放，捲動內容自己會讓位，不用 bottomClear。
     static let pageBottom = DomyTokens.Space.s8
 
     /// 這個 app 才有的尺寸。
