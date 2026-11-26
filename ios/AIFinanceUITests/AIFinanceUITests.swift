@@ -127,14 +127,14 @@ final class AIFinanceUITests: XCTestCase {
         // 大字時一列很高，「常用分類」可能被擠到懸浮分頁列後面，點下去其實點到分頁列（testCategoriesInLargeText 偶爾紅的原因）。
         // 先捲到按得到，再點；CI 的模擬器忙的時候剛換分頁的第一下也會被吃掉，還停在設定頁就再點，最多三次。
         let first = app.buttons["pick_飲食"]
+        scrollTo(row)
+        // isHittable 不管有沒有被分頁列蓋住，自己比位置：這一列的中間要在分頁列上面。
+        let bar = app.buttons["tab_設定"]
+        for _ in 0..<4 where bar.exists && row.frame.midY > bar.frame.minY - 12 { app.swipeUp(velocity: .slow) }
         for _ in 0..<3 {
             if first.exists { break }
-            guard row.exists else { break }
-            scrollTo(row)
-            // isHittable 不管有沒有被分頁列蓋住，自己比位置：這一列的中間要在分頁列上面。
-            let bar = app.buttons["tab_設定"]
-            for _ in 0..<4 where bar.exists && row.frame.midY > bar.frame.minY - 12 { app.swipeUp(velocity: .slow) }
-            if !row.isHittable { _ = waitHittable(row, timeout: 5) }
+            // 已經推進常用分類頁、只是還在載入時，設定那一列還在但被蓋住、點不到，這時只等不點（2026-11-26 CI 45818119916）。
+            guard waitHittable(row, timeout: 5) else { break }
             row.tap()
             if first.waitForExistence(timeout: 10) { break }
         }
