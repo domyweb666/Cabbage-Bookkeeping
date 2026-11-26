@@ -13,6 +13,8 @@ struct EntrySheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.isCurrentPage) private var isCurrentPage
+    @Environment(\.tabBarTop) private var tabBarTop
     let mode: Mode
 
     @State private var type: TxType = .expense
@@ -71,6 +73,16 @@ struct EntrySheet: View {
     private var latestDate: Date { model.days.date(of: model.today) ?? Date() }
 
     var body: some View {
+        // 分頁切走時整頁換成空的：填到一半的數字存在上面的 @State，回來還在；
+        // 改一筆的視窗打開時，畫面上也不會藏著第二組數字鍵、分類格（2026-11-26 CI 撞到兩顆 key_back）。
+        if isPage, !isCurrentPage {
+            Color.clear
+        } else {
+            screen
+        }
+    }
+
+    private var screen: some View {
         NavigationStack {
             VStack(spacing: 0) {
                 amount
@@ -115,6 +127,10 @@ struct EntrySheet: View {
                     Keypad(pad: $pad, canSave: canSave, onSave: save)
                         .padding(.horizontal, Gap.screenMargin)
                         .padding(.vertical, Gap.group)
+                        // 分頁上：最下排按鍵和「記下」會被懸浮分頁列蓋住，被蓋多少墊多少。
+                        // 改一筆是彈出來的視窗，蓋在分頁列上面，不用墊。
+                        .aboveTabBar()
+                        .environment(\.tabBarTop, isPage ? tabBarTop : .infinity)
                 }
             }
             .background(Theme.background.ignoresSafeArea())
