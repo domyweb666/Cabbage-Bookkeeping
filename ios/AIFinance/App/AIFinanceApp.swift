@@ -65,7 +65,10 @@ private struct RootView: View {
         ZStack {
             tab(.settings) { SettingsView() }
             tab(.ledger) { LedgerView() }
-            tab(.analysis) { AnalysisView() }
+            // 分析頁每次記帳都會重算報表，沒選中就不放進畫面，切過來才建（它的 onAppear 會順便更新今天）。
+            if page == .analysis {
+                tab(.analysis) { AnalysisView() }
+            }
         }
         .safeAreaInset(edge: .bottom, spacing: 0) { TabBar(page: $page) }
         .onAppear(perform: openEntryIfAsked)
@@ -77,7 +80,7 @@ private struct RootView: View {
         }
     }
 
-    /// 沒選中的頁藏起來、不給點、讀螢幕也略過，但不拆掉。
+    /// 設定、記帳沒選中時藏起來、不給點、讀螢幕也略過，但不拆掉，記帳頁開著的畫面和捲動位置才留得住。
     private func tab(_ which: Page, @ViewBuilder content: () -> some View) -> some View {
         let isOn = page == which
         return content()
