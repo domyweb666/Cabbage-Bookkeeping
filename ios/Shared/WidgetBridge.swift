@@ -27,12 +27,13 @@ enum WidgetBridge {
     }
 
     /// 寫好並請小工具重畫。內容沒變就什麼都不做，給 nil 就把檔刪掉。回傳有沒有動到檔案。
+    /// compareWithFile：呼叫的人已經知道跟上次不一樣時給 false，就不用先讀一次舊檔（效能清單第 5 項）。
     @discardableResult
-    static func publish(_ snapshot: WidgetSnapshot?) -> Bool {
+    static func publish(_ snapshot: WidgetSnapshot?, compareWithFile: Bool = true) -> Bool {
         guard let url = fileURL else { return false }
         do {
             if let snapshot {
-                if snapshot == read() { return false }
+                if compareWithFile, snapshot == read() { return false }
                 // 手機開機後解鎖過一次就讀得到，鎖著的時候小工具才畫得出來。
                 try JSONEncoder().encode(snapshot)
                     .write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])

@@ -69,24 +69,20 @@ final class LedgerModel {
     @ObservationIgnored private var cachedRange: UsualRange??
     @ObservationIgnored private var cachedHome: HomeFigures?
 
-    init(store: LocalStore) {
+    /// saved 是開 app 時在背景讀好的（AIFinanceApp.load）。讀失敗就是 failure，整個不給記。
+    init(store: LocalStore, saved: Result<SavedData, any Error>) {
         self.store = store
         self.today = AppConfig.current.today ?? Days.local.day(of: Date())
-        do {
+        switch saved {
+        case .success(let data):
             // 全部讀到才用。分類設定讀不出來時，自訂分類會被算成「其他」，明細和匯出都會錯。
-            let savedRows = try store.transactions()
-            let savedBudgets = try store.budgets()
-            let savedFixed = try store.fixedExpenses()
-            let savedBook = try store.categoryBook()
-            let ledgers = try store.ledgers()
-            let goals = try store.savingsGoals()
-            allTransactions = savedRows
-            allFixed = savedFixed
-            allBudgets = savedBudgets
-            book = savedBook
-            savedLedgers = ledgers
-            allGoals = goals
-        } catch {
+            allTransactions = data.transactions
+            allFixed = data.fixed
+            allBudgets = data.budgets
+            book = data.book
+            savedLedgers = data.ledgers
+            allGoals = data.goals
+        case .failure:
             loadFailed = true
         }
         currentLedgerId = Preferences.currentLedger ?? Ledger.mainID
@@ -353,8 +349,11 @@ final class LedgerModel {
             ? nil
             : WidgetSnapshot(today: today, transactions: transactions, budgets: budgets, fixed: fixed, savings: savings)
         if let last = published, last == next { return }
+        // 這次開 app 第一次送才去比檔案：上次關 app 前寫的可能一模一樣，就不用叫小工具重畫。
+        // 之後只要跟自己記得的不一樣，檔案一定也不一樣（只有這裡在寫），直接寫。
+        let firstTime = published == nil
         published = .some(next)
-        WidgetBridge.publish(next)
+        WidgetBridge.publish(next, compareWithFile: firstTime)
     }
 
     /// 不能復原的一句話，例如「已複製版本資訊」。
