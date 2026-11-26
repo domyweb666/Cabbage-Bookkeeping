@@ -106,7 +106,10 @@ struct BudgetSheet: View {
             .background(Theme.background.ignoresSafeArea())
             .navigationTitle(Words.Budget.title)
             .navigationBarTitleDisplayMode(.inline)
-            .navigationDestination(isPresented: $showFixed) { FixedListView() }
+            .navigationDestination(isPresented: $showFixed) {
+                // 這是彈出來的 sheet，下面沒有分頁列，不用墊高底部按鈕（aboveTabBar）。
+                FixedListView().environment(\.tabBarTop, .infinity)
+            }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button(Words.cancel) { dismiss() }

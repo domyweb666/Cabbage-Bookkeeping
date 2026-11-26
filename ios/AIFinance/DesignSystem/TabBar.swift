@@ -26,6 +26,28 @@ enum Page: Hashable, CaseIterable {
 extension EnvironmentValues {
     /// 這一頁是不是現在選中的分頁。三頁常駐，藏起來的頁用它關掉只該出現一次的東西（提示條）。
     @Entry var isCurrentPage = true
+    /// 懸浮分頁列上緣在螢幕上的位置（global 座標）。還沒量到是無限大，什麼都不墊。
+    @Entry var tabBarTop: CGFloat = .infinity
+}
+
+extension View {
+    /// 子頁面底部的按鈕列用。設定頁推進去的頁面拿不到外層替分頁列留的空間，按鈕會被分頁列蓋住
+    /// （2026-11-26 截圖 45、50、80、82、89）。量自己的底在哪，被蓋多少就往上墊多少；沒被蓋就是 0。
+    func aboveTabBar() -> some View {
+        modifier(AboveTabBar())
+    }
+}
+
+private struct AboveTabBar: ViewModifier {
+    @Environment(\.tabBarTop) private var tabBarTop
+    @State private var bottom: CGFloat = 0
+
+    func body(content: Content) -> some View {
+        content
+            .padding(.bottom, max(0, bottom - tabBarTop))
+            // 量的是墊過之後的外框：它貼著底，墊多少都不會動，不會量了又變。
+            .onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).maxY } action: { bottom = $0 }
+    }
 }
 
 /// 下面的懸浮膠囊分頁列，照豆帳的樣子：離底部安全區多 12 點，比系統分頁列高、字大一號。

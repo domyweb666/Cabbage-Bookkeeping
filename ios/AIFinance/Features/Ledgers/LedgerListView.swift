@@ -145,6 +145,7 @@ struct LedgerListView: View {
         }
         .padding(.horizontal, Gap.screenMargin)
         .padding(.vertical, Gap.group)
+        .aboveTabBar()
         .background(Theme.background)
     }
 }

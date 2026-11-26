@@ -81,6 +81,8 @@ private struct RootView: View {
     @Environment(\.scenePhase) private var scenePhase
 
     @State private var page: Page = .ledger
+    /// 分頁列上緣，給設定頁推進去的子頁面把底部按鈕墊高（aboveTabBar）。
+    @State private var tabBarTop: CGFloat = .infinity
 
     var body: some View {
         ZStack {
@@ -91,7 +93,11 @@ private struct RootView: View {
                 tab(.analysis) { AnalysisView() }
             }
         }
-        .safeAreaInset(edge: .bottom, spacing: 0) { TabBar(page: $page) }
+        .environment(\.tabBarTop, tabBarTop)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            TabBar(page: $page)
+                .onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).minY } action: { tabBarTop = $0 }
+        }
         .onAppear(perform: openEntryIfAsked)
         .onChange(of: EntryRequest.shared.asked) { _, asked in
             if asked { openEntryIfAsked() }
