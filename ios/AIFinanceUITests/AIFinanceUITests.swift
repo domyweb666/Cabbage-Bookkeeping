@@ -102,14 +102,28 @@ final class AIFinanceUITests: XCTestCase {
     private func openCategoriesFromSettings() {
         XCTAssertTrue(app.buttons["addButton"].waitForExistence(timeout: 30))
         app.buttons["tab_設定"].tap()
-        XCTAssertTrue(app.buttons["categoriesRow"].waitForExistence(timeout: 30))
-        app.buttons["categoriesRow"].tap()
-        // CI 的模擬器忙的時候，剛換分頁的第一下會被吃掉（2026-11-25 碰過），還停在設定頁就再點一次。
+        let row = app.buttons["categoriesRow"]
+        XCTAssertTrue(row.waitForExistence(timeout: 30))
+        // 大字時一列很高，「常用分類」可能被擠到懸浮分頁列後面，點下去其實點到分頁列（testCategoriesInLargeText 偶爾紅的原因）。
+        // 先捲到按得到，再點；CI 的模擬器忙的時候剛換分頁的第一下也會被吃掉，還停在設定頁就再點，最多三次。
         let first = app.buttons["pick_飲食"]
-        if !first.waitForExistence(timeout: 10), app.buttons["categoriesRow"].exists {
-            app.buttons["categoriesRow"].tap()
+        for _ in 0..<3 {
+            if first.exists { break }
+            guard row.exists else { break }
+            scrollTo(row)
+            // isHittable 不管有沒有被分頁列蓋住，自己比位置：這一列的中間要在分頁列上面。
+            let bar = app.buttons["tab_設定"]
+            for _ in 0..<4 where bar.exists && row.frame.midY > bar.frame.minY - 12 { app.swipeUp(velocity: .slow) }
+            if !row.isHittable { _ = waitHittable(row, timeout: 5) }
+            row.tap()
+            if first.waitForExistence(timeout: 10) { break }
         }
         XCTAssertTrue(first.waitForExistence(timeout: 30))
+    }
+
+    private func waitHittable(_ element: XCUIElement, timeout: TimeInterval) -> Bool {
+        let expectation = XCTNSPredicateExpectation(predicate: NSPredicate(format: "hittable == true"), object: element)
+        return XCTWaiter.wait(for: [expectation], timeout: timeout) == .completed
     }
 
     private func clear(_ field: XCUIElement, characters: Int) {
