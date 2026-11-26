@@ -833,4 +833,21 @@ final class AIFinanceUITests: XCTestCase {
         openAnalysis()
         shot("27-大字-分析")
     }
+
+    // MARK: - 廣告
+
+    /// 帶 -showAds 才放廣告（Debug 版是 Google 的測試廣告）。CI 的網路不一定拿得到，拿不到就只拍沒有廣告的樣子，不算失敗。
+    func testAdBannerOnLedgerAndAnalysis() {
+        launch(demo: "steady", extra: ["-showAds"])
+        // 記一筆頁不放廣告。
+        XCTAssertTrue(app.buttons["entrySave"].waitForExistence(timeout: 30))
+        XCTAssertFalse(any("adBanner").exists, "記一筆頁不能有廣告")
+        showLedger()
+        _ = any("adBanner").waitForExistence(timeout: 20)
+        Thread.sleep(forTimeInterval: 5)
+        shot("93-廣告-明細")
+        app.buttons["tab_分析"].tap()
+        Thread.sleep(forTimeInterval: 8)
+        shot("94-廣告-分析")
+    }
 }

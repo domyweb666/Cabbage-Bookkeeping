@@ -38,11 +38,15 @@ struct LedgerView: View {
             }
         }
         .background(Theme.background.ignoresSafeArea())
-        // 刪一筆、改一筆後的提示條（含復原）。沒有提示條時不佔位置。
+        // 刪一筆、改一筆後的提示條（含復原），下面是橫幅廣告。兩個都沒有時不佔位置。
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            ToastSlot()
-                .padding(.horizontal, Gap.screenMargin)
-                .padding(.bottom, Gap.group)
+            VStack(spacing: Gap.group) {
+                ToastSlot()
+                    .padding(.horizontal, Gap.screenMargin)
+                AdSlot()
+            }
+            .padding(.bottom, Gap.group)
+            .aboveTabBar()
         }
         .sheet(item: $editing) { EntrySheet(mode: .edit($0)) }
         .sheet(isPresented: $showBudget) { BudgetSheet() }

@@ -60,7 +60,12 @@ struct AnalysisView: View {
             .coversStatusBar()
             .toolbar(.hidden, for: .navigationBar)
             .safeAreaInset(edge: .bottom) {
-                ToastSlot().padding(.horizontal, Gap.screenMargin)
+                VStack(spacing: Gap.group) {
+                    ToastSlot().padding(.horizontal, Gap.screenMargin)
+                    // 推進某一類的明細時不放，只放在分析頁本身。
+                    if path.isEmpty { AdSlot() }
+                }
+                .aboveTabBar()
             }
             .navigationDestination(for: CategoryPick.self) { CategoryDetailView(pick: $0) }
             .sheet(isPresented: $showBudget) { BudgetSheet() }

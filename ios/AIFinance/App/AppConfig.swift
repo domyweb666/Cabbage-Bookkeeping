@@ -15,6 +15,8 @@ struct AppConfig {
     let today: String?
     /// 提示條停留秒數，測試時拉長（-slowToast）。
     let toastSeconds: UInt64
+    /// 放不放廣告。畫面測試（資料放記憶體）預設不放，截圖才不會跟著廣告變；要看廣告帶 -showAds。
+    let showsAds: Bool
 
     static let current: AppConfig = {
         #if DEBUG
@@ -27,13 +29,15 @@ struct AppConfig {
             return arguments[i + 1]
         }
         let demo = value(after: "-demo").flatMap(DemoData.init(rawValue:))
+        let inMemory = demo != nil || arguments.contains("-memoryStore")
         return AppConfig(
-            inMemory: demo != nil || arguments.contains("-memoryStore"),
+            inMemory: inMemory,
             demo: demo,
             wipe: arguments.contains("-wipeStore"),
             forceDark: arguments.contains("-forceDark"),
             today: value(after: "-today"),
-            toastSeconds: arguments.contains("-slowToast") ? 60 : 5
+            toastSeconds: arguments.contains("-slowToast") ? 60 : 5,
+            showsAds: !inMemory || arguments.contains("-showAds")
         )
     }()
 }

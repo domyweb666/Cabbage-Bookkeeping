@@ -31,6 +31,8 @@ struct AIFinanceApp: App {
         // 畫面測試互不影響：設定從頭開始，要的話連手機上的資料庫也清掉。
         if config.inMemory { Preferences.forget() }
         if config.wipe { try? store.wipe() }
+        // 廣告 SDK 先在背景準備，切到明細、分析時比較快出來。
+        Ads.start()
         // 紀錄多的時候解全部資料要一段時間，放背景讀，主執行緒先把畫面畫出來（效能清單第 4 項）。
         _boot = State(initialValue: .loading(store))
     }

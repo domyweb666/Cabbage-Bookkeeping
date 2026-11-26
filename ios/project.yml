@@ -22,6 +22,10 @@ packages:
   VeggieKit:
     url: https://github.com/domyweb666/VeggieKit
     exactVersion: 1.0.2
+  # 明細、分析頁的橫幅廣告（2026-11-27）。只給 App 用，小工具不連。
+  GoogleMobileAds:
+    url: https://github.com/googleads/swift-package-manager-google-mobile-ads
+    from: 12.0.0
 
 targets:
   AIFinance:
@@ -34,6 +38,8 @@ targets:
     dependencies:
       - package: FinanceCore
       - package: VeggieKit
+      - package: GoogleMobileAds
+        product: GoogleMobileAds
       - target: BaicaiWidget
     info:
       path: AIFinance/Resources/Info.plist
@@ -52,6 +58,13 @@ targets:
         CFBundleURLTypes:
           - CFBundleURLName: org.domyweb.baicai
             CFBundleURLSchemes: [baicai]
+        # AdMob。現在是 Google 公開的測試 App ID，送審前換成多米 AdMob 後台那組（docs/上架指南.md 廣告一節）。
+        GADApplicationIdentifier: ca-app-pub-3940256099942544~1458002511
+        # 正式橫幅編號。空的就不出廣告（Debug 版一律用測試編號）。
+        BaicaiBannerUnitID: ""
+        # 只放非個人化廣告，不跳追蹤詢問，所以沒有 NSUserTrackingUsageDescription。
+        SKAdNetworkItems:
+          - SKAdNetworkIdentifier: cstr6suwn9.skadnetwork
     entitlements:
       path: AIFinance/Resources/AIFinance.entitlements
       properties:
