@@ -56,7 +56,8 @@ public struct FixedRevision: Codable, Hashable, Sendable {
 }
 
 public struct FixedExpense: Codable, Identifiable, Hashable, Sendable {
-    public static let currentSchema = 1
+    /// 2：多了 ledgerId（哪一本帳）。舊的沒有這欄，讀出來是 nil，算「我的帳本」。
+    public static let currentSchema = 2
 
     public let id: UUID
     public private(set) var amount: Int
@@ -71,9 +72,11 @@ public struct FixedExpense: Codable, Identifiable, Hashable, Sendable {
     /// 刪除的那天。記好的不動，之後不再記。
     public private(set) var endedOn: String?
     public private(set) var revisions: [FixedRevision]
+    /// 哪一本帳。自動記的那筆也記在這本。nil 是「我的帳本」。
+    public let ledgerId: UUID?
     public let schemaVersion: Int
 
-    public init(id: UUID = UUID(), fields: FixedFields, startsOn: String, createdAt: Date) {
+    public init(id: UUID = UUID(), fields: FixedFields, startsOn: String, createdAt: Date, ledgerId: UUID? = nil) {
         self.id = id
         self.amount = fields.amount
         self.categoryId = fields.categoryId
@@ -84,6 +87,7 @@ public struct FixedExpense: Codable, Identifiable, Hashable, Sendable {
         self.createdAt = createdAt
         self.endedOn = nil
         self.revisions = []
+        self.ledgerId = ledgerId
         self.schemaVersion = Self.currentSchema
     }
 
@@ -238,7 +242,8 @@ private extension FixedExpense {
                 isOneOff: schedule.isYearly
             ),
             createdAt: now, timeZone: days.timeZone.identifier,
-            fixed: FixedOrigin(itemId: id, period: period, isYearly: schedule.isYearly)
+            fixed: FixedOrigin(itemId: id, period: period, isYearly: schedule.isYearly),
+            ledgerId: ledgerId
         )
     }
 }

@@ -2,7 +2,8 @@ import Foundation
 
 /// 匯出 CSV。開頭帶 BOM，Excel 直接開不會亂碼。
 public enum CSVExport {
-    public static let header = ["日期", "類型", "金額", "分類", "備註", "一次性", "記錄時間", "時區", "編號", "來源"]
+    /// 帳本放在時區後面：前面幾欄的位置不變，以前匯出的檔跟新的對得起來。
+    public static let header = ["日期", "類型", "金額", "分類", "備註", "一次性", "記錄時間", "時區", "帳本", "編號", "來源"]
 
     public static func field(_ value: String) -> String {
         let needsQuote = value.contains(",") || value.contains("\"") || value.contains("\n") || value.contains("\r")
@@ -12,7 +13,8 @@ public enum CSVExport {
         return needsQuote || risky ? "\"" + safe.replacingOccurrences(of: "\"", with: "\"\"") + "\"" : safe
     }
 
-    public static func make(transactions: [Txn], book: CategoryBook) -> String {
+    /// 全部帳本的紀錄一起匯出，每筆寫是哪一本。ledgers 是存過的帳本（刪掉的也可以放），找不到算「我的帳本」。
+    public static func make(transactions: [Txn], book: CategoryBook, ledgers: [Ledger] = []) -> String {
         let formatter = ISO8601DateFormatter()
         let rows = transactions
             .filter { $0.deletedAt == nil }
@@ -27,6 +29,7 @@ public enum CSVExport {
                     t.isOneOff ? "是" : "",
                     formatter.string(from: t.createdAt),
                     t.timeZone,
+                    Ledgers.name(of: t.ledgerKey, in: ledgers),
                     t.id.uuidString,
                     AnalysisText.source(of: t) ?? "",
                 ]

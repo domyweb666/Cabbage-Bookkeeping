@@ -46,6 +46,8 @@ targets:
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
         ITSAppUsesNonExemptEncryption: false
+        # 按「掃發票」或收據的「拍照」才問。相簿走系統的選照片畫面，不用權限。
+        NSCameraUsageDescription: 掃發票和拍收據要用相機。
         # 小工具按下去打開記一筆（baicai://entry）。網址不帶資料，打開畫面而已。
         CFBundleURLTypes:
           - CFBundleURLName: org.domyweb.baicai

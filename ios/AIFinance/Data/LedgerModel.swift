@@ -19,13 +19,25 @@ struct Toast: Identifiable, Equatable {
 }
 
 /// 全部畫面共用的資料與動作。所有數字都從 transactions 當場算出來，不另外存總數。
+/// 多帳本：手機上存的是全部帳本的（all 開頭的），畫面、合計、預算、固定支出、分析報表只看目前那一本，
+/// 所以 transactions、budgets、fixed 都已經是目前那本的，其他畫面不用知道有幾本帳。
 @MainActor
 @Observable
 final class LedgerModel {
+    /// 目前那一本帳的紀錄（含刪掉的）。
     private(set) var transactions: [Txn] = []
+    /// 目前那一本帳的預算。
     private(set) var budgets: [Budget] = []
-    /// 固定支出，刪掉的也在裡面（以前的月份要用）。畫面列的是 activeFixed。
+    /// 目前那一本帳的固定支出，刪掉的也在裡面（以前的月份要用）。畫面列的是 activeFixed。
     private(set) var fixed: [FixedExpense] = []
+    /// 還在用的帳本，「我的帳本」在最前面。
+    private(set) var ledgerList: [Ledger] = [.main]
+    /// 目前在哪一本。
+    private(set) var currentLedgerId = Ledger.mainID
+    /// 目前那本進行中的存錢，沒有就是 nil。
+    private(set) var savingsGoal: SavingsGoal?
+    /// 存到哪裡了。跟著紀錄重算。
+    private(set) var savings: SavingsProgress?
     private(set) var toast: Toast?
     private(set) var today: String
     /// 紀錄、預算、固定支出、分類設定有一樣讀不出來就是 true：不列明細、不匯出、不開放寫入，免得顯示錯的或蓋掉還在的資料。
@@ -34,6 +46,17 @@ final class LedgerModel {
     private(set) var book = CategoryBook()
     /// 明細的每一天。紀錄變了才重排，不在每次重畫時排（效能，2026-11-26）。
     private(set) var sections: [DaySection] = []
+
+    // 全部帳本的資料。只在這個檔裡用，畫面拿上面那幾個。
+    /// 全部帳本的紀錄。要被觀察：匯出鈕、帳本選單上的金額看的是它。
+    private var allTransactions: [Txn] = []
+    @ObservationIgnored private var allBudgets: [Budget] = []
+    @ObservationIgnored private var allFixed: [FixedExpense] = []
+    /// 存過的帳本，刪掉的也在。
+    @ObservationIgnored private var savedLedgers: [Ledger] = []
+    @ObservationIgnored private var allGoals: [SavingsGoal] = []
+    /// 帳本選單上每本這個月花多少。紀錄變了就丟掉。
+    @ObservationIgnored private var cachedLedgerTotals: [UUID: Int] = [:]
 
     @ObservationIgnored private let store: LocalStore
     @ObservationIgnored private(set) var days = Days.local
@@ -55,13 +78,18 @@ final class LedgerModel {
             let savedBudgets = try store.budgets()
             let savedFixed = try store.fixedExpenses()
             let savedBook = try store.categoryBook()
-            transactions = savedRows
-            fixed = savedFixed
-            budgets = savedBudgets
+            let ledgers = try store.ledgers()
+            let goals = try store.savingsGoals()
+            allTransactions = savedRows
+            allFixed = savedFixed
+            allBudgets = savedBudgets
             book = savedBook
+            savedLedgers = ledgers
+            allGoals = goals
         } catch {
             loadFailed = true
         }
+        currentLedgerId = Preferences.currentLedger ?? Ledger.mainID
         changed()
         postFixed()
         publish()
@@ -115,8 +143,20 @@ final class LedgerModel {
         return made
     }
 
-    /// 紀錄、預算、固定支出、分類或今天變了就呼叫：明細重排，算過的數字丟掉。
+    /// 紀錄、預算、固定支出、分類、帳本或今天變了就呼叫：挑出目前那本的，明細重排，算過的數字丟掉。
     private func changed() {
+        ledgerList = Ledgers.alive(savedLedgers)
+        // 上次那本被刪了（或資料壞了），回到第一本。
+        if !ledgerList.contains(where: { $0.id == currentLedgerId }) {
+            currentLedgerId = ledgerList.first?.id ?? Ledger.mainID
+        }
+        let current = currentLedgerId
+        transactions = allTransactions.filter { $0.belongs(to: current) }
+        budgets = allBudgets.filter { $0.belongs(to: current) }
+        fixed = allFixed.filter { $0.belongs(to: current) }
+        savingsGoal = Savings.active(in: allGoals, ledger: current)
+        savings = savingsGoal.map { Savings.progress(of: $0, transactions: transactions) }
+        cachedLedgerTotals = [:]
         sections = Timeline.sections(from: transactions)
         reports = [:]
         cachedRecent = nil
@@ -142,7 +182,7 @@ final class LedgerModel {
 
     /// 新增一筆。成功回傳 true。
     func add(_ fields: TxnFields) -> Bool {
-        let row = Txn(fields: fields, createdAt: Date(), timeZone: days.timeZone.identifier)
+        let row = Txn(fields: fields, createdAt: Date(), timeZone: days.timeZone.identifier, ledgerId: currentLedgerId)
         guard write(row) else { return false }
         let category = book.category(of: row)
         let total = Analysis.categoryTotal(
@@ -192,10 +232,12 @@ final class LedgerModel {
     /// 訂這個月起的預算。0 代表不訂。
     func setBudget(_ amount: Int) -> Bool {
         guard !loadFailed else { return false }
-        let budget = Budget(month: days.monthStart(of: today), amount: amount, createdAt: Date())
+        let budget = Budget(
+            month: days.monthStart(of: today), amount: amount, createdAt: Date(), ledgerId: currentLedgerId
+        )
         do {
             try store.save(budget)
-            budgets.append(budget)
+            allBudgets.append(budget)
             changed()
             publish()
             Haptics.saved()
@@ -212,7 +254,7 @@ final class LedgerModel {
             fields: TxnFields(
                 type: .expense, amount: amount, occurredOn: range.to, categoryId: Categories.named(Words.Ledger.otherCategory).id
             ),
-            createdAt: Date(), timeZone: days.timeZone.identifier, estimate: range
+            createdAt: Date(), timeZone: days.timeZone.identifier, estimate: range, ledgerId: currentLedgerId
         )
         guard write(row) else { return false }
         show(Toast(message: Words.Analysis.savedEstimate(amount), undo: .added(row)))
@@ -244,9 +286,15 @@ final class LedgerModel {
     func deleteAll() -> Bool {
         do {
             try store.wipe()
-            transactions = []
-            budgets = []
-            fixed = []
+            // 收據照片和掃過的發票號碼不在資料庫裡，一起清掉。
+            try ReceiptPhotos.standard.eraseAll()
+            try InvoiceLog.shared.eraseAll()
+            allTransactions = []
+            allBudgets = []
+            allFixed = []
+            savedLedgers = []
+            allGoals = []
+            currentLedgerId = Ledger.mainID
             loadFailed = false
             toast = nil
             removeExports()
@@ -260,9 +308,9 @@ final class LedgerModel {
         }
     }
 
-    /// 匯出 CSV，回傳暫存檔的位置。
+    /// 匯出 CSV，回傳暫存檔的位置。全部帳本一起匯出，每筆寫是哪一本。
     func exportCSV() throws -> URL {
-        let csv = CSVExport.make(transactions: transactions, book: book)
+        let csv = CSVExport.make(transactions: allTransactions, book: book, ledgers: savedLedgers)
         let url = FileManager.default.temporaryDirectory.appendingPathComponent(Words.Settings.exportName(today))
         try Data(csv.utf8).write(to: url, options: .atomic)
         return url
@@ -289,10 +337,10 @@ final class LedgerModel {
             fail(Words.Failure.saveToast)
             return false
         }
-        if let i = transactions.firstIndex(where: { $0.id == row.id }) {
-            transactions[i] = row
+        if let i = allTransactions.firstIndex(where: { $0.id == row.id }) {
+            allTransactions[i] = row
         } else {
-            transactions.append(row)
+            allTransactions.append(row)
         }
         changed()
         publish()
@@ -303,7 +351,7 @@ final class LedgerModel {
     private func publish() {
         let next = loadFailed
             ? nil
-            : WidgetSnapshot(today: today, transactions: transactions, budgets: budgets, fixed: fixed)
+            : WidgetSnapshot(today: today, transactions: transactions, budgets: budgets, fixed: fixed, savings: savings)
         if let last = published, last == next { return }
         published = .some(next)
         WidgetBridge.publish(next)
@@ -359,7 +407,8 @@ final class LedgerModel {
     }
 
     func addFixed(_ fields: FixedFields) -> Bool {
-        guard writeFixed(FixedExpense(fields: fields, startsOn: today, createdAt: Date())) else { return false }
+        let item = FixedExpense(fields: fields, startsOn: today, createdAt: Date(), ledgerId: currentLedgerId)
+        guard writeFixed(item) else { return false }
         Haptics.saved()
         // 到期日就是今天的，現在就記。
         postFixed()
@@ -390,20 +439,20 @@ final class LedgerModel {
         } catch {
             return false
         }
-        if let i = fixed.firstIndex(where: { $0.id == item.id }) {
-            fixed[i] = item
+        if let i = allFixed.firstIndex(where: { $0.id == item.id }) {
+            allFixed[i] = item
         } else {
-            fixed.append(item)
+            allFixed.append(item)
         }
         changed()
         publish()
         return true
     }
 
-    /// 把到期的固定支出記下來。一次全部存，存不成就一筆都不記，下次打開再試。
+    /// 把到期的固定支出記下來，每一本帳的都記（記在各自那本）。一次全部存，存不成就一筆都不記，下次打開再試。
     private func postFixed() {
         guard !loadFailed else { return }
-        let rows = FixedPlan.due(items: fixed, transactions: transactions, today: today, days: days, now: Date())
+        let rows = FixedPlan.due(items: allFixed, transactions: allTransactions, today: today, days: days, now: Date())
         guard !rows.isEmpty else { return }
         do {
             try store.save(rows)
@@ -411,11 +460,208 @@ final class LedgerModel {
             fail(Words.Failure.saveToast)
             return
         }
-        transactions += rows
+        allTransactions += rows
         changed()
         publish()
-        let names = rows.map { (title: title(of: $0), amount: $0.amount) }
+        // 提示條只講目前這本的，別本的打開那本時明細裡就有。
+        let names = rows.filter { $0.belongs(to: currentLedgerId) }.map { (title: title(of: $0), amount: $0.amount) }
         if let message = AnalysisText.posted(names) { show(Toast(message: message)) }
+    }
+}
+
+// MARK: - 帳本
+
+extension LedgerModel {
+    var currentLedger: Ledger {
+        ledgerList.first { $0.id == currentLedgerId } ?? ledgerList.first ?? .main
+    }
+
+    /// 全部帳本裡有沒有還在的紀錄（匯出用，匯出是全部帳本一起）。
+    var hasAnyRecord: Bool { allTransactions.contains { $0.deletedAt == nil } }
+
+    /// 只有一本時，記帳頁不出現換帳本那顆，畫面跟以前一樣。
+    var hasManyLedgers: Bool { ledgerList.count > 1 }
+
+    /// 那一本這個月花多少（帳本選單、帳本清單用）。
+    func monthExpense(of ledger: UUID) -> Int {
+        if let saved = cachedLedgerTotals[ledger] { return saved }
+        let month = String(today.prefix(7))
+        let total = allTransactions
+            .filter { $0.deletedAt == nil && $0.type == .expense && $0.belongs(to: ledger) && $0.occurredOn.hasPrefix(month) }
+            .reduce(0) { $0 + $1.amount }
+        cachedLedgerTotals[ledger] = total
+        return total
+    }
+
+    /// 那一本還有幾筆紀錄（刪帳本前的確認用）。
+    func recordCount(of ledger: UUID) -> Int {
+        allTransactions.filter { $0.deletedAt == nil && $0.belongs(to: ledger) }.count
+    }
+
+    func ledgerProblem(_ name: String, excluding id: UUID?) -> Ledgers.Problem? {
+        Ledgers.problem(with: name, in: savedLedgers, excluding: id)
+    }
+
+    /// 換到另一本。月份、總額、明細、預算、固定支出、存錢、小工具一起換。
+    func switchLedger(to id: UUID) {
+        guard id != currentLedgerId, ledgerList.contains(where: { $0.id == id }) else { return }
+        moveTo(id)
+        changed()
+        publish()
+        Haptics.selected()
+    }
+
+    /// 新增一本並換過去。名字不能用或沒存成回傳 false。
+    func addLedger(name: String, color: LedgerColor) -> Bool {
+        guard !loadFailed, ledgerProblem(name, excluding: nil) == nil else { return false }
+        let ledger = Ledger(name: name, color: color, createdAt: Date())
+        do {
+            try store.save(ledger)
+        } catch {
+            Haptics.failed()
+            return false
+        }
+        upsertLedger(ledger)
+        moveTo(ledger.id)
+        changed()
+        publish()
+        Haptics.saved()
+        return true
+    }
+
+    func updateLedger(_ ledger: Ledger, name: String, color: LedgerColor) -> Bool {
+        guard !loadFailed, ledgerProblem(name, excluding: ledger.id) == nil else { return false }
+        let next = ledger.renamed(name, color: color)
+        do {
+            try store.save(next)
+        } catch {
+            Haptics.failed()
+            return false
+        }
+        upsertLedger(next)
+        changed()
+        Haptics.saved()
+        return true
+    }
+
+    /// 刪一本帳：那本的紀錄、固定支出、存錢跟著刪（留在手機上、不再顯示，跟刪單筆一樣）。
+    /// 最後一本不能刪。一次存，存不成就全部不動。
+    func deleteLedger(_ ledger: Ledger) -> Bool {
+        guard !loadFailed, ledgerList.count > 1, ledgerList.contains(where: { $0.id == ledger.id }) else { return false }
+        let now = Date()
+        var gone = ledger
+        gone.deletedAt = now
+        let rows = allTransactions.filter { $0.deletedAt == nil && $0.belongs(to: ledger.id) }.map { row -> Txn in
+            var copy = row
+            copy.deletedAt = now
+            return copy
+        }
+        let items = allFixed.filter { $0.endedOn == nil && $0.belongs(to: ledger.id) }.map { $0.ended(on: today) }
+        let goals = allGoals.filter { $0.deletedAt == nil && $0.belongs(to: ledger.id) }.map { goal -> SavingsGoal in
+            var copy = goal
+            copy.deletedAt = now
+            return copy
+        }
+        do {
+            try store.removeLedger(gone, rows: rows, fixed: items, goals: goals)
+        } catch {
+            fail(Words.Failure.saveToast)
+            return false
+        }
+        upsertLedger(gone)
+        let rowsById = Dictionary(uniqueKeysWithValues: rows.map { ($0.id, $0) })
+        allTransactions = allTransactions.map { rowsById[$0.id] ?? $0 }
+        let itemsById = Dictionary(uniqueKeysWithValues: items.map { ($0.id, $0) })
+        allFixed = allFixed.map { itemsById[$0.id] ?? $0 }
+        let goalsById = Dictionary(uniqueKeysWithValues: goals.map { ($0.id, $0) })
+        allGoals = allGoals.map { goalsById[$0.id] ?? $0 }
+        if currentLedgerId == ledger.id {
+            moveTo(ledgerList.first { $0.id != ledger.id }?.id ?? Ledger.mainID)
+        }
+        changed()
+        publish()
+        Haptics.deleted()
+        show(Toast(message: Words.Ledger.deleted(ledger.name)))
+        return true
+    }
+
+    private func moveTo(_ id: UUID) {
+        currentLedgerId = id
+        Preferences.currentLedger = id
+        // 上一本的「復原」不帶到這本來。
+        toast = nil
+    }
+
+    private func upsertLedger(_ ledger: Ledger) {
+        if let i = savedLedgers.firstIndex(where: { $0.id == ledger.id }) {
+            savedLedgers[i] = ledger
+        } else {
+            savedLedgers.append(ledger)
+        }
+    }
+}
+
+// MARK: - 存錢
+
+extension LedgerModel {
+    /// 在目前這本開始存錢，從今天起算。這本原本有一個進行中的，就換成新的。
+    func startSavings(name: String, target: Int, endsOn: String) -> Bool {
+        guard !loadFailed, target > 0 else { return false }
+        var changes: [SavingsGoal] = []
+        if var old = savingsGoal {
+            old.deletedAt = Date()
+            changes.append(old)
+        }
+        changes.append(SavingsGoal(
+            ledgerId: currentLedgerId, name: name, target: target, startsOn: today, endsOn: endsOn, createdAt: Date()
+        ))
+        return writeGoals(changes)
+    }
+
+    /// 改名字、金額、日子。開始那天不變。
+    func updateSavings(_ goal: SavingsGoal, name: String, target: Int, endsOn: String) -> Bool {
+        guard !loadFailed, target > 0 else { return false }
+        return writeGoals([goal.changed(name: name, target: target, endsOn: endsOn)])
+    }
+
+    /// 不存了。紀錄不動。
+    func stopSavings(_ goal: SavingsGoal) -> Bool {
+        guard !loadFailed else { return false }
+        var gone = goal
+        gone.deletedAt = Date()
+        do {
+            try store.save([gone])
+        } catch {
+            Haptics.failed()
+            return false
+        }
+        upsertGoal(gone)
+        changed()
+        publish()
+        Haptics.deleted()
+        return true
+    }
+
+    private func writeGoals(_ goals: [SavingsGoal]) -> Bool {
+        do {
+            try store.save(goals)
+        } catch {
+            Haptics.failed()
+            return false
+        }
+        for goal in goals { upsertGoal(goal) }
+        changed()
+        publish()
+        Haptics.saved()
+        return true
+    }
+
+    private func upsertGoal(_ goal: SavingsGoal) {
+        if let i = allGoals.firstIndex(where: { $0.id == goal.id }) {
+            allGoals[i] = goal
+        } else {
+            allGoals.append(goal)
+        }
     }
 }
 

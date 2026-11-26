@@ -7,8 +7,12 @@ import WidgetKit
 
 struct LeftEntry: TimelineEntry {
     let date: Date
+    /// 這一格是哪一天（yyyy-MM-dd），存錢的「過了那天」要用。
+    let today: String
     /// 讀不到快照是 nil。
     let figures: HomeFigures?
+    /// 目前那本帳在存錢才有。存錢小工具用。
+    let savings: SavingsProgress?
 }
 
 struct LeftProvider: TimelineProvider {
@@ -32,7 +36,10 @@ struct LeftProvider: TimelineProvider {
 
     private static func entry(at date: Date, snapshot: WidgetSnapshot?) -> LeftEntry {
         let days = Days.local
-        return LeftEntry(date: date, figures: snapshot?.figures(today: days.day(of: date), days: days))
+        let today = days.day(of: date)
+        return LeftEntry(
+            date: date, today: today, figures: snapshot?.figures(today: today, days: days), savings: snapshot?.savings
+        )
     }
 
     private static func dates(from now: Date) -> [Date] {
@@ -46,7 +53,9 @@ struct LeftProvider: TimelineProvider {
     private static var sample: WidgetSnapshot {
         let today = Days.local.day(of: Date())
         let budget = Budget(month: Days.local.monthStart(of: today), amount: 8500, createdAt: Date())
-        return WidgetSnapshot(today: today, transactions: [], budgets: [budget], fixed: [])
+        let end = Days.local.adding(days: 60, to: today)
+        let savings = SavingsProgress(target: 30000, endsOn: end, saved: 17600, hasIncome: true)
+        return WidgetSnapshot(today: today, transactions: [], budgets: [budget], fixed: [], savings: savings)
     }
 }
 
@@ -82,8 +91,8 @@ private struct LeftWidgetView: View {
     }
 }
 
-/// 主畫面小的。
-private struct SmallView: View {
+/// 主畫面小的。存錢小工具中尺寸的左半邊也用這個。
+struct SmallView: View {
     let figures: HomeFigures?
 
     var body: some View {
@@ -111,7 +120,7 @@ private struct SmallView: View {
 }
 
 /// 整塊小工具都按得到，這顆讓人看得出按了會記一筆。
-private struct AddPill: View {
+struct AddPill: View {
     @Environment(\.widgetRenderingMode) private var renderingMode
 
     var body: some View {
@@ -169,7 +178,7 @@ private struct InlineView: View {
     }
 }
 
-private struct AmountLabel: View {
+struct AmountLabel: View {
     let amount: Int
 
     var body: some View {
@@ -182,7 +191,7 @@ private struct AmountLabel: View {
     }
 }
 
-private enum WidgetLook {
+enum WidgetLook {
     static let minScale: CGFloat = 0.5
 }
 

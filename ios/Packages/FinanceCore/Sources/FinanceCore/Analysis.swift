@@ -418,3 +418,157 @@ public enum Analysis {
         UsualRange(low: values.min() ?? 0, high: values.max() ?? 0, months: values.count)
     }
 }
+
+// MARK: - 分析頁的看法（2026-11-26）
+
+// 分析頁可以選四種看法：一句話、還能花、月曆、圓餅。一句話和還能花用上面的 report，
+// 這裡是另外三種要的數字：每天花多少、這週跟上週、各類佔多少。定義寫在 .analytics/05 的 M9 到 M11。
+
+/// 某一天花了多少。固定支出和補的大概不算在裡面。
+public struct DaySpend: Identifiable, Hashable, Sendable {
+    /// yyyy-MM-dd
+    public let day: String
+    public let amount: Int
+    public let count: Int
+    /// 這個月還沒到的日子。
+    public let isFuture: Bool
+
+    public var id: String { day }
+    public var number: Int { Days.number(of: day) }
+}
+
+/// 一個月每天花多少（M9）。
+public struct DailySpending: Hashable, Sendable {
+    /// 1 號到月底，一天一個。
+    public let days: [DaySpend]
+    /// 沒畫進每天的：固定支出和補的大概。
+    public let hidden: Int
+
+    /// 越深花越多，分幾級（不含 0）。
+    public static let levels = 3
+
+    public var maxAmount: Int { days.map(\.amount).max() ?? 0 }
+
+    /// 花最多的那一天，一樣多取前面那天。一天都沒花就沒有。
+    public var top: DaySpend? {
+        var best: DaySpend?
+        for day in days where day.amount > (best?.amount ?? 0) { best = day }
+        return best
+    }
+
+    /// 0 是沒花，1 到 levels 照跟最多那天比，切成等分。
+    public func level(of day: DaySpend) -> Int {
+        let most = maxAmount
+        guard day.amount > 0, most > 0 else { return 0 }
+        let raw = Int((Double(day.amount) * Double(Self.levels) / Double(most)).rounded(.up))
+        return min(Self.levels, max(1, raw))
+    }
+}
+
+/// 這週到今天，跟上週同幾天比（M10）。一週從週日開始，跟月曆一樣。
+public struct WeekComparison: Hashable, Sendable {
+    public let thisWeek: DayRange
+    public let lastWeek: DayRange
+    public let thisAmount: Int
+    public let lastAmount: Int
+}
+
+/// 圓餅的一塊（M11）。
+public struct PieSlice: Identifiable, Hashable, Sendable {
+    /// 小的合成一塊時是 nil。
+    public let category: TxCategory?
+    public let amount: Int
+    /// 0 到 100 的整數，全部加起來剛好 100。
+    public let percent: Int
+    /// 合起來的有幾類；一般的一塊是 1。
+    public let merged: Int
+
+    public var id: String { category?.id.uuidString ?? "rest" }
+}
+
+extension Analysis {
+    /// 圓餅最多單獨畫幾類，其他合成一塊。
+    public static let pieTop = 5
+
+    /// 每天花多少。固定支出不畫，不然房租那天永遠最深；補的大概不知道是哪一天花的，也不畫。
+    public static func daily(month anyDay: String, today: String, transactions: [Txn], days: Days) -> DailySpending {
+        let month = days.monthStart(of: anyDay)
+        let prefix = String(month.prefix(8))
+        let expenses = inMonth(month, transactions).filter { $0.deletedAt == nil && $0.type == .expense }
+        let drawn = expenses.filter { $0.fixed == nil && $0.estimate == nil }
+        let byDay = Dictionary(grouping: drawn, by: \.occurredOn)
+        let list = (1...max(1, days.length(ofMonth: month))).map { number -> DaySpend in
+            let day = prefix + String(format: "%02d", number)
+            let rows = byDay[day] ?? []
+            return DaySpend(day: day, amount: sum(rows), count: rows.count, isFuture: day > today)
+        }
+        return DailySpending(days: list, hidden: sum(expenses) - sum(drawn))
+    }
+
+    /// 這週（週日到今天）跟上週同幾天。上週一筆自己記的都沒有就不比，免得拿空的一週來比。
+    /// 固定支出和補的大概不算，跟每天花多少一樣。
+    public static func weekComparison(today: String, transactions: [Txn], days: Days) -> WeekComparison? {
+        let start = days.adding(days: -days.weekday(of: today), to: today)
+        let lastStart = days.adding(days: -7, to: start)
+        let lastEnd = days.adding(days: -7, to: today)
+        let rows = transactions.filter {
+            $0.deletedAt == nil && $0.type == .expense && $0.fixed == nil && $0.estimate == nil
+        }
+        let thisRows = rows.filter { $0.occurredOn >= start && $0.occurredOn <= today }
+        let lastRows = rows.filter { $0.occurredOn >= lastStart && $0.occurredOn <= lastEnd }
+        guard !lastRows.isEmpty else { return nil }
+        return WeekComparison(
+            thisWeek: DayRange(from: start, to: today),
+            lastWeek: DayRange(from: lastStart, to: lastEnd),
+            thisAmount: sum(thisRows),
+            lastAmount: sum(lastRows)
+        )
+    }
+
+    /// 圓餅：用 report 的分類金額（M4），前 pieTop 類各一塊，其他合成一塊。只多一類時不合，直接畫出來。
+    public static func slices(of lines: [CategoryLine], top: Int = Analysis.pieTop) -> [PieSlice] {
+        let shown = lines.filter { $0.total > 0 }
+        let total = shown.reduce(0) { $0 + $1.total }
+        guard total > 0 else { return [] }
+        let keep = shown.count - 1 > top ? Array(shown.prefix(top)) : shown
+        let rest = shown.dropFirst(keep.count)
+        var amounts = keep.map(\.total)
+        if !rest.isEmpty { amounts.append(rest.reduce(0) { $0 + $1.total }) }
+        let percents = percents(of: amounts)
+        var result = keep.enumerated().map { i, line in
+            PieSlice(category: line.category, amount: line.total, percent: percents[i], merged: 1)
+        }
+        if !rest.isEmpty {
+            result.append(PieSlice(category: nil, amount: amounts[keep.count], percent: percents[keep.count], merged: rest.count))
+        }
+        return result
+    }
+
+    /// 換成整數百分比，加起來剛好 100：先捨去，差的照餘數大的補，一樣大補前面的。
+    static func percents(of amounts: [Int]) -> [Int] {
+        let total = amounts.reduce(0, +)
+        guard total > 0 else { return amounts.map { _ in 0 } }
+        var result = amounts.map { $0 * 100 / total }
+        let short = 100 - result.reduce(0, +)
+        let order = amounts.indices.sorted { a, b in
+            let ra = amounts[a] * 100 % total
+            let rb = amounts[b] * 100 % total
+            return ra == rb ? a < b : ra > rb
+        }
+        for i in order.prefix(short) { result[i] += 1 }
+        return result
+    }
+}
+
+extension Days {
+    /// 月曆上一排的星期，從週日開始。
+    public static let weekdayNames = ["日", "一", "二", "三", "四", "五", "六"]
+
+    /// 那一天是星期幾：0 是週日，6 是週六。
+    public func weekday(of day: String) -> Int {
+        guard let date = date(of: day) else { return 0 }
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = timeZone
+        return (calendar.component(.weekday, from: date) + 6) % 7
+    }
+}

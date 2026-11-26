@@ -38,6 +38,30 @@ final class StoredFixed {
     }
 }
 
+/// 一本帳一列。刪掉的也留著（deletedAt），紀錄才找得到自己屬於哪一本。
+@Model
+final class StoredLedger {
+    @Attribute(.unique) var id: UUID
+    var payload: Data
+
+    init(id: UUID, payload: Data) {
+        self.id = id
+        self.payload = payload
+    }
+}
+
+/// 存錢一個一列。換一個新的時，舊的標上 deletedAt 留著。
+@Model
+final class StoredSavings {
+    @Attribute(.unique) var id: UUID
+    var payload: Data
+
+    init(id: UUID, payload: Data) {
+        self.id = id
+        self.payload = payload
+    }
+}
+
 /// 分類的設定整份存一列：改過的名字、自己新增的、顯示哪些、順序。
 @Model
 final class StoredCategoryBook {
@@ -62,7 +86,8 @@ final class LocalStore {
         // 有了 App Group，SwiftData 預設會改放到共用的資料夾。資料庫留在 App 自己這邊，小工具另外給一份快照。
         let config = ModelConfiguration("Baicai", isStoredInMemoryOnly: inMemory, groupContainer: .none)
         container = try ModelContainer(
-            for: StoredTxn.self, StoredBudget.self, StoredCategoryBook.self, StoredFixed.self, configurations: config
+            for: StoredTxn.self, StoredBudget.self, StoredCategoryBook.self, StoredFixed.self,
+            StoredLedger.self, StoredSavings.self, configurations: config
         )
         context = ModelContext(container)
         context.autosaveEnabled = false
@@ -80,6 +105,41 @@ final class LocalStore {
         try context.fetch(FetchDescriptor<StoredFixed>())
             .map { try decoder.decode(FixedExpense.self, from: $0.payload) }
             .sorted { $0.createdAt < $1.createdAt }
+    }
+
+    /// 存過的帳本，刪掉的也在。沒存過「我的帳本」的話這裡沒有它，由 Ledgers.alive 補上。
+    func ledgers() throws -> [Ledger] {
+        try context.fetch(FetchDescriptor<StoredLedger>()).map { try decoder.decode(Ledger.self, from: $0.payload) }
+    }
+
+    func savingsGoals() throws -> [SavingsGoal] {
+        try context.fetch(FetchDescriptor<StoredSavings>())
+            .map { try decoder.decode(SavingsGoal.self, from: $0.payload) }
+    }
+
+    func save(_ ledger: Ledger) throws {
+        try upsert(ledger)
+        try commit()
+    }
+
+    /// 存錢：要換新的時，舊的（標好 deletedAt）跟新的一起存，存不成就兩個都不動。
+    func save(_ goals: [SavingsGoal]) throws {
+        for goal in goals { try upsert(goal) }
+        try commit()
+    }
+
+    /// 刪一本帳：帳本、那本的紀錄、固定支出、存錢一次存，存不成就全部不動。
+    func removeLedger(_ ledger: Ledger, rows: [Txn], fixed: [FixedExpense], goals: [SavingsGoal]) throws {
+        do {
+            try upsert(ledger)
+            for row in rows { try upsert(row) }
+            for item in fixed { try upsert(item) }
+            for goal in goals { try upsert(goal) }
+        } catch {
+            context.rollback()
+            throw error
+        }
+        try commit()
     }
 
     /// 沒存過就是預設的樣子。
@@ -114,15 +174,7 @@ final class LocalStore {
     }
 
     func save(_ item: FixedExpense) throws {
-        let payload = try encoder.encode(item)
-        let id = item.id
-        var query = FetchDescriptor<StoredFixed>(predicate: #Predicate<StoredFixed> { $0.id == id })
-        query.fetchLimit = 1
-        if let row = try context.fetch(query).first {
-            row.payload = payload
-        } else {
-            context.insert(StoredFixed(id: id, payload: payload))
-        }
+        try upsert(item)
         try commit()
     }
 
@@ -132,6 +184,8 @@ final class LocalStore {
             try context.fetch(FetchDescriptor<StoredBudget>()).forEach { context.delete($0) }
             try context.fetch(FetchDescriptor<StoredCategoryBook>()).forEach { context.delete($0) }
             try context.fetch(FetchDescriptor<StoredFixed>()).forEach { context.delete($0) }
+            try context.fetch(FetchDescriptor<StoredLedger>()).forEach { context.delete($0) }
+            try context.fetch(FetchDescriptor<StoredSavings>()).forEach { context.delete($0) }
         } catch {
             context.rollback()
             throw error
@@ -148,6 +202,42 @@ final class LocalStore {
             row.payload = payload
         } else {
             context.insert(StoredTxn(id: id, payload: payload))
+        }
+    }
+
+    private func upsert(_ item: FixedExpense) throws {
+        let payload = try encoder.encode(item)
+        let id = item.id
+        var query = FetchDescriptor<StoredFixed>(predicate: #Predicate<StoredFixed> { $0.id == id })
+        query.fetchLimit = 1
+        if let row = try context.fetch(query).first {
+            row.payload = payload
+        } else {
+            context.insert(StoredFixed(id: id, payload: payload))
+        }
+    }
+
+    private func upsert(_ ledger: Ledger) throws {
+        let payload = try encoder.encode(ledger)
+        let id = ledger.id
+        var query = FetchDescriptor<StoredLedger>(predicate: #Predicate<StoredLedger> { $0.id == id })
+        query.fetchLimit = 1
+        if let row = try context.fetch(query).first {
+            row.payload = payload
+        } else {
+            context.insert(StoredLedger(id: id, payload: payload))
+        }
+    }
+
+    private func upsert(_ goal: SavingsGoal) throws {
+        let payload = try encoder.encode(goal)
+        let id = goal.id
+        var query = FetchDescriptor<StoredSavings>(predicate: #Predicate<StoredSavings> { $0.id == id })
+        query.fetchLimit = 1
+        if let row = try context.fetch(query).first {
+            row.payload = payload
+        } else {
+            context.insert(StoredSavings(id: id, payload: payload))
         }
     }
 

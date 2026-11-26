@@ -3,6 +3,7 @@ import SwiftUI
 import UIKit
 
 /// 記帳分頁：月份、本月支出、每天的明細、底部一顆「記一筆」。
+/// 有兩本以上的帳時，月份旁邊多一顆換帳本；有在存錢時，總額卡下面多一條存錢。
 struct LedgerView: View {
     @Environment(LedgerModel.self) private var model
 
@@ -11,6 +12,8 @@ struct LedgerView: View {
     @State private var editing: Txn?
     @State private var showNew = false
     @State private var showBudget = false
+    @State private var showNewLedger = false
+    @State private var showSavings = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -23,6 +26,12 @@ struct LedgerView: View {
                     summary
                         .card()
                         .padding(.horizontal, Gap.screenMargin)
+                    if let progress = model.savings {
+                        SavingsBar(progress: progress) { showSavings = true }
+                            .card()
+                            .padding(.horizontal, Gap.screenMargin)
+                            .padding(.top, Gap.group)
+                    }
                     EmptyMessage(title: Words.Ledger.emptyTitle, message: Words.Ledger.emptyMessage)
                 } else {
                     list
@@ -53,6 +62,8 @@ struct LedgerView: View {
         .sheet(isPresented: $showNew) { EntrySheet(mode: .new) }
         .sheet(item: $editing) { EntrySheet(mode: .edit($0)) }
         .sheet(isPresented: $showBudget) { BudgetSheet() }
+        .sheet(isPresented: $showNewLedger) { LedgerEditView(ledger: nil) }
+        .sheet(isPresented: $showSavings) { savingsSheet }
         .onAppear { openRequestedEntry() }
         .onChange(of: EntryRequest.shared.pending) { _, _ in openRequestedEntry() }
     }
@@ -72,8 +83,32 @@ struct LedgerView: View {
             .first != nil
     }
 
-    /// 現在是哪個月。固定在上面，總額那張卡跟著捲。
+    /// 現在是哪個月。固定在上面，總額那張卡跟著捲。兩本以上時右邊是換帳本那顆，字放大排不下就放到下一排。
     private var title: some View {
+        Group {
+            if model.hasManyLedgers {
+                ViewThatFits(in: .horizontal) {
+                    HStack(alignment: .center, spacing: Gap.item) {
+                        monthTitle
+                        Spacer(minLength: Gap.item)
+                        LedgerChip { showNewLedger = true }
+                    }
+                    VStack(alignment: .leading, spacing: Gap.item) {
+                        monthTitle
+                        LedgerChip { showNewLedger = true }
+                    }
+                }
+            } else {
+                monthTitle
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, Gap.screenMargin)
+        .padding(.top, Gap.pageTop)
+        .padding(.bottom, Gap.group)
+    }
+
+    private var monthTitle: some View {
         HStack(alignment: .firstTextBaseline, spacing: Gap.item) {
             Text(Days.shortMonth(of: model.today))
                 .font(Typo.largeTitle.font)
@@ -82,10 +117,6 @@ struct LedgerView: View {
                 .font(Typo.subheadline.font)
                 .foregroundStyle(Theme.secondaryText)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, Gap.screenMargin)
-        .padding(.top, Gap.pageTop)
-        .padding(.bottom, Gap.group)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(model.days.monthTitle(of: model.today))
         .accessibilityAddTraits(.isHeader)
@@ -198,6 +229,21 @@ struct LedgerView: View {
             .lineLimit(1)
     }
 
+    /// 點存錢那一條打開的頁。
+    private var savingsSheet: some View {
+        NavigationStack {
+            SavingsPage()
+                .toolbar {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button(Words.done) { showSavings = false }
+                            .accessibilityIdentifier("savingsDone")
+                    }
+                }
+        }
+        .tint(Theme.accent)
+        .presentationDragIndicator(.visible)
+    }
+
     private var list: some View {
         let sections = model.sections
         return List {
@@ -205,6 +251,15 @@ struct LedgerView: View {
                 summary.listRowInsets(
                     EdgeInsets(top: Gap.cardPad, leading: Gap.cardPad, bottom: Gap.cardPad, trailing: Gap.cardPad)
                 )
+            }
+            if let progress = model.savings {
+                Section {
+                    SavingsBar(progress: progress) { showSavings = true }
+                        .listRowInsets(
+                            EdgeInsets(top: Gap.group, leading: Gap.cardPad, bottom: Gap.group, trailing: Gap.cardPad)
+                        )
+                }
+                .listSectionSpacing(Gap.group)
             }
             ForEach(sections) { section in
                 Section {

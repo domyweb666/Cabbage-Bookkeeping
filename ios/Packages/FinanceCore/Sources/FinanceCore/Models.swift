@@ -43,7 +43,8 @@ public struct TxnFields: Hashable, Sendable {
 /// 一筆紀錄。金額是正整數（新台幣元），日期是使用者選的 yyyy-MM-dd。
 public struct Txn: Codable, Identifiable, Hashable, Sendable {
     /// 2：多了 fixed 和 estimate。
-    public static let currentSchema = 2
+    /// 3：多了 ledgerId（哪一本帳）。舊的沒有這欄，讀出來是 nil，算「我的帳本」，不用搬資料。
+    public static let currentSchema = 3
 
     public let id: UUID
     public private(set) var type: TxType
@@ -62,11 +63,13 @@ public struct Txn: Codable, Identifiable, Hashable, Sendable {
     public let fixed: FixedOrigin?
     /// 補的是哪幾天的大概。照實記的是 nil。
     public private(set) var estimate: DayRange?
+    /// 哪一本帳。nil 是「我的帳本」（多帳本以前記的）。改一筆不會換本。
+    public let ledgerId: UUID?
     public let schemaVersion: Int
 
     public init(
         id: UUID = UUID(), fields: TxnFields, createdAt: Date, timeZone: String,
-        fixed: FixedOrigin? = nil, estimate: DayRange? = nil
+        fixed: FixedOrigin? = nil, estimate: DayRange? = nil, ledgerId: UUID? = nil
     ) {
         self.id = id
         self.type = fields.type
@@ -81,6 +84,7 @@ public struct Txn: Codable, Identifiable, Hashable, Sendable {
         self.revisions = []
         self.fixed = fixed
         self.estimate = fields.type == .expense ? estimate : nil
+        self.ledgerId = ledgerId
         self.schemaVersion = Self.currentSchema
     }
 
@@ -132,12 +136,15 @@ public struct Budget: Codable, Identifiable, Hashable, Sendable {
     /// 0 代表從這個月起不訂預算。
     public let amount: Int
     public let createdAt: Date
+    /// 哪一本帳的預算。nil 是「我的帳本」（多帳本以前訂的，舊資料沒有這欄）。
+    public let ledgerId: UUID?
 
-    public init(id: UUID = UUID(), month: String, amount: Int, createdAt: Date) {
+    public init(id: UUID = UUID(), month: String, amount: Int, createdAt: Date, ledgerId: UUID? = nil) {
         self.id = id
         self.month = month
         self.amount = amount
         self.createdAt = createdAt
+        self.ledgerId = ledgerId
     }
 
     /// 某個月適用的預算，沒訂就是 nil。

@@ -25,6 +25,11 @@ struct EntrySheet: View {
     @State private var showCategories = false
     @State private var confirmDelete = false
     @State private var saveFailed = false
+    /// 掃發票：開著相機、剛掃到等相機關好再填、填進來的那張（記下成功才記進掃過的清單）、記過的那張要問。
+    @State private var scanning = false
+    @State private var scannedText: String?
+    @State private var invoice: InvoiceQR?
+    @State private var repeatedInvoice: InvoiceQR?
     @FocusState private var noteFocused: Bool
 
     private static let contentID = "entryContent"
@@ -121,6 +126,23 @@ struct EntrySheet: View {
             } message: {
                 Text(Words.Failure.saveMessage)
             }
+            .alert(
+                Words.Invoice.seenTitle,
+                isPresented: Binding(get: { repeatedInvoice != nil }, set: { if !$0 { repeatedInvoice = nil } }),
+                presenting: repeatedInvoice
+            ) { seen in
+                Button(Words.Invoice.recordAnyway) { fill(seen) }
+                Button(Words.cancel, role: .cancel) {}
+            } message: { seen in
+                Text(Words.Invoice.seenMessage(seen))
+            }
+            // 相機關好才填，記過的提醒才不會跟關相機撞在一起。
+            .sheet(isPresented: $scanning, onDismiss: takeScanned) {
+                InvoiceScanSheet { text in
+                    scannedText = text
+                    scanning = false
+                }
+            }
         }
         .tint(Theme.accent)
         .interactiveDismissDisabled(isDirty)
@@ -183,6 +205,15 @@ struct EntrySheet: View {
                 Button(Words.Entry.delete, role: .destructive) { confirmDelete = true }
                     .tint(Theme.destructive)
                     .accessibilityIdentifier("entryDelete")
+            } else {
+                // 可有可無的捷徑：放在頂部列右邊的小圖示，不跟「記下」搶。
+                Button(action: scan) {
+                    Image(systemName: "qrcode.viewfinder")
+                        .frame(minWidth: Metric.touch, minHeight: Metric.touch)
+                        .contentShape(Rectangle())
+                }
+                .accessibilityLabel(Words.Invoice.scan)
+                .accessibilityIdentifier("scanInvoice")
             }
         }
     }
@@ -272,6 +303,10 @@ struct EntrySheet: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             noteField
+            // 收據照片記完再補，所以只在改一筆出現。打備註時讓位。
+            if let original, !noteFocused {
+                ReceiptStrip(txnId: original.id)
+            }
         }
     }
 
@@ -351,7 +386,59 @@ struct EntrySheet: View {
     private func save() {
         guard let fields = form.fields else { return }
         let done = original.map { model.update($0, with: fields) } ?? model.add(fields)
-        if done { dismiss() } else { saveFailed = true }
+        guard done else {
+            saveFailed = true
+            return
+        }
+        if let invoice {
+            // 紀錄已經存好了。這份只用來提醒重複，寫不進去也不擋人，下次掃到同一張只是不會提醒。
+            _ = try? InvoiceLog.shared.record(invoice)
+        }
+        dismiss()
+    }
+
+    /// 按「掃發票」。畫面測試沒有相機，帶了 -invoiceQR 就當作掃到那串。
+    private func scan() {
+        noteFocused = false
+        if let text = InvoiceScanInjection.text {
+            take(text)
+        } else {
+            scanning = true
+        }
+    }
+
+    private func takeScanned() {
+        guard let text = scannedText else { return }
+        scannedText = nil
+        take(text)
+    }
+
+    /// 掃到一張：記過的先問，沒記過直接填。
+    private func take(_ text: String) {
+        guard let read = InvoiceQR.parse(text) else { return }
+        // 讀不到掃過的清單就當沒記過，照樣讓人記。
+        if (try? InvoiceLog.shared.contains(read)) == true {
+            repeatedInvoice = read
+        } else {
+            fill(read)
+        }
+    }
+
+    /// 金額填總計額、日期填開立日；備註空的才放第一個品名。分類不猜，照使用者選的。
+    private func fill(_ read: InvoiceQR) {
+        invoice = read
+        // 發票一定是花出去的錢。
+        type = .expense
+        if read.total > 0, String(read.total).count <= AmountPad.maxDigits {
+            pad = AmountPad(value: read.total)
+        }
+        // 日期最晚到今天。
+        if read.day <= model.today, let day = model.days.date(of: read.day) {
+            date = day
+        }
+        if note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, let name = read.firstItemName {
+            note = String(name.prefix(EntryForm.maxNoteLength))
+        }
     }
 }
 

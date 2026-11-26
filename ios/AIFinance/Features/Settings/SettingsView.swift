@@ -17,7 +17,8 @@ struct SettingsView: View {
 
     private let config = VeggieConfig.baicai
 
-    private var canExport: Bool { !model.isEmpty && !model.loadFailed }
+    /// 匯出的是全部帳本的，所以看全部帳本有沒有紀錄。
+    private var canExport: Bool { model.hasAnyRecord && !model.loadFailed }
 
     var body: some View {
         NavigationStack {
@@ -61,6 +62,17 @@ struct SettingsView: View {
 
     private var appSection: some View {
         RowCard(Words.Settings.appSection) {
+            // 帳本放第一列（K6）：右邊寫現在這本，點進去換、新增、改名字、刪除。
+            NavigationLink {
+                LedgerListView()
+            } label: {
+                VeggieRow(
+                    icon: "book.closed", title: Words.Ledgers.title, value: model.currentLedger.name, accessory: .push
+                )
+            }
+            .buttonStyle(.row)
+            .accessibilityIdentifier("ledgersRow")
+            RowDivider()
             NavigationLink {
                 CategoryPickerView(showsDone: false)
             } label: {
@@ -76,6 +88,17 @@ struct SettingsView: View {
             }
             .buttonStyle(.row)
             .accessibilityIdentifier("fixedRow")
+            RowDivider()
+            NavigationLink {
+                SavingsPage()
+            } label: {
+                VeggieRow(
+                    icon: "banknote", title: Words.Saving.title,
+                    value: Words.Saving.settingsValue(model.savings, today: model.today), accessory: .push
+                )
+            }
+            .buttonStyle(.row)
+            .accessibilityIdentifier("savingsRow")
         }
     }
 

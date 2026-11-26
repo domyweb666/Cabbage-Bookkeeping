@@ -222,3 +222,96 @@ public enum AnalysisText {
         status.left >= 0 ? status.left : status.budget
     }
 }
+
+// MARK: - 分析頁的看法（H 到 K，2026-11-26）
+
+extension AnalysisText {
+    // MARK: 一句話（H）
+
+    /// H1 最上面的結論。可以跟平常比時講比的結果，還不能比就講花了多少。
+    public static func headline(_ report: MonthReport) -> String {
+        let name = monthName(report)
+        guard let range = report.comparison.range else {
+            return report.expenseCount == 0 ? "\(name)還沒有支出紀錄。" : "\(name)花了 \(Money.format(report.expense))。"
+        }
+        if report.routine > range.high { return "\(name)比平常多 \(Money.format(report.routine - range.high))。" }
+        if report.routine < range.low { return "\(name)比平常少 \(Money.format(range.low - report.routine))。" }
+        return "\(name)跟平常差不多。"
+    }
+
+    /// H2 結論下面那一行：花了多少、平常是多少；還不能比就說為什麼（A2）。沒有支出就不說。
+    public static func headlineDetail(_ report: MonthReport) -> String? {
+        switch report.comparison {
+        case .empty:
+            return nil
+        case .ready(let range):
+            let period = report.isCurrent ? "平常到 \(report.throughDay) 號" : "平常一個月"
+            return "花了 \(Money.format(report.expense))，\(period)是 \(money(range))。"
+        default:
+            return comparison(report)
+        }
+    }
+
+    // MARK: 還能花（I）
+
+    /// I1 大字下面那一句。月份過完或沒有剩就改講預算那一句（A4）。
+    public static func budgetDays(_ status: BudgetStatus) -> String {
+        guard let perDay = status.perDay else { return budget(status) }
+        return "剩 \(status.daysLeft) 天，每天 \(Money.format(perDay))。"
+    }
+
+    /// I2 進度條下面的小字：預算、花了多少、先留多少。
+    public static func budgetDetail(_ status: BudgetStatus) -> String {
+        let base = "預算 \(Money.format(status.budget))，花了 \(Money.format(status.spent))"
+        return status.reserved > 0
+            ? "\(base)，已經先留 \(Money.format(status.reserved)) 給固定支出。"
+            : "\(base)。"
+    }
+
+    /// I3
+    public static let dailyTitle = "每天花多少"
+
+    /// I4 第一行直接講最多的那天。一天都沒花就沒有。
+    public static func dailyAnswer(_ daily: DailySpending) -> String? {
+        guard let top = daily.top else { return nil }
+        return "最多的一天是 \(Days.slash(top.day))，\(Money.format(top.amount))。"
+    }
+
+    /// I5 沒畫進去的。
+    public static func dailyHidden(_ amount: Int) -> String? {
+        amount > 0 ? "固定支出和補的大概數字不畫，共 \(Money.format(amount))。" : nil
+    }
+
+    // MARK: 月曆（J）
+
+    /// J1
+    public static let calendarTitle = "哪幾天花得多"
+
+    /// J2 圖例兩端。
+    public static let calendarLow = "花得少"
+    public static let calendarHigh = "花得多"
+
+    /// J3
+    public static let weekTitle = "這週跟上週"
+
+    /// J4 這週到今天跟上週同幾天比。
+    public static func week(_ comparison: WeekComparison, todayName: String) -> String {
+        let head = "這週到週\(todayName) \(Money.format(comparison.thisAmount))"
+        let difference = comparison.thisAmount - comparison.lastAmount
+        if difference > 0 { return "\(head)，比上週同幾天多 \(Money.format(difference))。" }
+        if difference < 0 { return "\(head)，比上週同幾天少 \(Money.format(-difference))。" }
+        return "\(head)，跟上週同幾天一樣。"
+    }
+
+    /// J5 兩條的標籤。
+    public static func weekLabel(_ range: DayRange, isThisWeek: Bool) -> String {
+        "\(isThisWeek ? "這週" : "上週") \(Days.slash(range.from)) 到 \(Days.slash(range.to))"
+    }
+
+    // MARK: 圓餅（K）
+
+    /// K1 合起來的那一塊。不叫「其他」，免得跟「其他」這個分類搞混。
+    public static func restSlice(_ count: Int) -> String {
+        "其餘 \(count) 類"
+    }
+}

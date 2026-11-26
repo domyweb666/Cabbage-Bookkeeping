@@ -9,6 +9,8 @@ enum Shared {
     static let entryHost = "entry"
     static let entryURL = URL(string: "\(scheme)://\(entryHost)")
     static let widgetKind = "org.domyweb.baicai.widget.left"
+    /// 存錢的小工具（2026-11-26 新增）。
+    static let savingsWidgetKind = "org.domyweb.baicai.widget.savings"
     static let controlKind = "org.domyweb.baicai.control.add"
 }
 

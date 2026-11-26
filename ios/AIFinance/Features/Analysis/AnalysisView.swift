@@ -3,8 +3,15 @@ import SwiftUI
 
 /// 分析分頁。每張卡回答一題，第一行直接是答案。
 /// 題目、算法、句子分別在 .analytics/01、05、06-08。
+/// 標題下面可以切四種看法（AnalysisMode），選了記住；月份左右切四種都有。
 struct AnalysisView: View {
     @Environment(LedgerModel.self) private var model
+
+    @AppStorage(AnalysisMode.storageKey) private var mode = AnalysisMode.standard
+
+    init() {
+        _ = AnalysisMode.forgetWhenTesting
+    }
 
     /// nil 代表這個月。
     @State private var pickedMonth: String?
@@ -28,13 +35,26 @@ struct AnalysisView: View {
                 if model.loadFailed {
                     EmptyMessage(title: Words.Failure.loadTitle, message: Words.Failure.loadMessage)
                 } else {
+                    modePicker
                     monthSwitcher
 
                     if let recap { recapCard(recap) }
-                    totalCard(report)
-                    if !report.categories.isEmpty { categoryCard(report) }
-                    if !report.biggest.isEmpty { biggestCard(report) }
-                    if model.recentMonths.count >= 2 { recentCard }
+                    switch mode {
+                    case .sentence:
+                        headlineBlock(report)
+                        if !report.categories.isEmpty { categoryCard(report) }
+                        if !report.biggest.isEmpty { biggestCard(report) }
+                        if model.recentMonths.count >= 2 { recentCard }
+                    case .budget:
+                        BudgetModeView(
+                            report: report, onBudget: { showBudget = true }, onPick: { path.append($0) }
+                        )
+                    case .calendar:
+                        CalendarModeView(report: report)
+                    case .pie:
+                        PieModeView(report: report, onPick: { path.append($0) })
+                    }
+                    savingsSlot
                 }
             }
             .coversStatusBar()
@@ -48,6 +68,22 @@ struct AnalysisView: View {
             .sheet(item: $editing) { EntrySheet(mode: .edit($0)) }
         }
         .onAppear { model.refreshToday() }
+    }
+
+    // MARK: - 看法
+
+    private var modePicker: some View {
+        Picker(Words.AnalysisModes.picker, selection: $mode) {
+            ForEach(AnalysisMode.allCases) { Text($0.title).tag($0) }
+        }
+        .pickerStyle(.segmented)
+        .accessibilityIdentifier("analysisMode")
+    }
+
+    /// 存錢目標的卡（子代理 L 做的），四種看法都放在最下面。沒有目標時什麼都不放。
+    @ViewBuilder
+    private var savingsSlot: some View {
+        SavingsCard()
     }
 
     // MARK: - 月份
@@ -128,16 +164,26 @@ struct AnalysisView: View {
         .accessibilityIdentifier("recapCard")
     }
 
-    // MARK: - 花了多少
+    // MARK: - 花了多少（看法「一句話」，畫布 K1）
 
-    private func totalCard(_ report: MonthReport) -> some View {
+    /// 最上面一句結論，下面一行花了多少、平常多少，再來是預算。不放在卡片裡，當整頁的開頭。
+    private func headlineBlock(_ report: MonthReport) -> some View {
         VStack(alignment: .leading, spacing: Gap.group) {
-            VStack(alignment: .leading, spacing: Gap.tight) {
-                cardTitle(AnalysisText.totalTitle(report))
-                AmountText(text: Money.format(report.expense), value: report.expense, font: Typo.title1.font)
+            VStack(alignment: .leading, spacing: Gap.item) {
+                Text(AnalysisText.headline(report))
+                    .font(Typo.title1.font)
+                    .foregroundStyle(Theme.primaryText)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityAddTraits(.isHeader)
                     .accessibilityIdentifier("analysisTotal")
+                if let detail = AnalysisText.headlineDetail(report) {
+                    Text(detail)
+                        .font(Typo.subheadline.font)
+                        .foregroundStyle(Theme.secondaryText)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityIdentifier("comparisonText")
+                }
             }
-            answer(AnalysisText.comparison(report), id: "comparisonText")
             if let gap = report.gapToFill {
                 Button(AnalysisText.estimateLink) { estimating = EstimateTarget(range: gap) }
                     .font(Typo.subheadline.font.weight(.semibold))
@@ -155,13 +201,9 @@ struct AnalysisView: View {
             if report.income > 0 {
                 small(Words.Analysis.income(report.income))
             }
-
-            Divider()
-
             budgetPart(report)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .card()
     }
 
     /// 預算那一句，下面說明先扣掉了什麼。

@@ -6,6 +6,7 @@ import WidgetKit
 struct BaicaiWidgetBundle: WidgetBundle {
     var body: some Widget {
         LeftWidget()
+        SavingsWidget()
         if #available(iOS 18.0, *) {
             AddEntryControl()
         }
