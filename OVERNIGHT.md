@@ -14,8 +14,10 @@
 不做：併 main、出 TestFlight、iCloud 共享、分析頁要不要放帳本切換鈕（產品決定）。
 
 ## 待確認（需要多米決定的事）
+- 第 2 項（大字時設定頁圖示貼字）：問題在共用套件 VeggieKit 的 VeggieRow，圖示欄寫死 24 點寬。改法已寫好在 E:\VeggieKit 的本機分支 scaled-row-icon（2e93f15，圖示欄跟著字級變寬），**沒推**：VeggieKit 是公開 repo，而且豆帳、蒜日子等幾個 app 都在用。你點頭後：推上去、打 1.0.2 標籤，白菜的 project.yml 改 exactVersion 1.0.2。
 
 ## 卡住的項目
 
 ## 執行紀錄
 - 11:04 從 features-1126（c15738b）開出 overnight-20261126-1104。features-1126 的 CI 45743874044 還在跑。
+- 11:40 第 3、4、5 項的程式寫完、分開提交（456850d、da18fcf、5d32825），推上 overnight-20261126-1104，CI 45746920107 開跑。第 2 項改法在 VeggieKit 本機分支，見待確認。
