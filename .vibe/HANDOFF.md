@@ -11,7 +11,8 @@
   - P：改一筆收據照片＋記一筆掃發票 QR（EntrySheet、project.yml 相機權限、FinanceCore InvoiceQR、ReceiptInvoiceTests）
   - A：分析頁四種看法切換（一句話／還能花／月曆／圓餅）（Features/Analysis、Analysis.swift、AnalysisModesTests）
   - L：多帳本（K4 K5 標題旁切換、設定帳本清單）＋存錢目標自動算三處（資料層、LedgerView、Settings、小工具、LedgersSavingsTests）
-- 子代理不 commit。全部回來後：補共用檔（AnalysisView 插 SavingsCard 等，看各回報）、提交指定檔名、`git push -u origin features-1126`、`gh workflow run CI --ref features-1126`、看截圖 60、70、80 起。
+- 2026-11-26 傍晚：四個都回來了，整合完提交、推上去，第一次 CI 是 45740455021（還沒編過，第一次一定會有編譯錯，照 log 修）。畫布第 14 版。各子代理「沒把握編過的地方」與待補清單記在共同規則檔尾的「整合待辦」。
+- 原本的步驟：全部回來後：補共用檔（AnalysisView 插 SavingsCard 等，看各回報）、提交指定檔名、`git push -u origin features-1126`、`gh workflow run CI --ref features-1126`、看截圖 60、70、80 起。
 - 之後：iCloud 共享帳本＋成員（資料層換 CKSyncEngine 或 Core Data，要多米在後台開 iCloud）。出 TestFlight 要多米說。
 
 ## QC-0015（2026-11-26）
