@@ -7,12 +7,14 @@ import UIKit
 /// - 只放非個人化廣告：不看使用者是誰、不跳「允許追蹤」（.uiux/廣告方案-2026-11-26.md）。
 /// - 還沒拿到廣告、或拿不到，就不佔位置，不留一塊空白。
 struct AdSlot: View {
+    /// 分頁藏起來時不要廣告：開 app 時明細頁藏在後面先要，常常拿不到（2026-11-27 截圖 93）。
+    @Environment(\.isCurrentPage) private var isCurrentPage
     @State private var height: CGFloat = 0
 
     var body: some View {
         if let unitID = Ads.bannerUnitID {
             GeometryReader { proxy in
-                AdBanner(unitID: unitID, width: proxy.size.width, height: $height)
+                AdBanner(unitID: unitID, width: proxy.size.width, isActive: isCurrentPage, height: $height)
                     .frame(width: proxy.size.width, height: height)
             }
             .frame(height: height)
@@ -60,6 +62,7 @@ enum Ads {
 private struct AdBanner: UIViewRepresentable {
     let unitID: String
     let width: CGFloat
+    let isActive: Bool
     @Binding var height: CGFloat
 
     func makeCoordinator() -> Coordinator { Coordinator(height: $height) }
@@ -72,8 +75,8 @@ private struct AdBanner: UIViewRepresentable {
     }
 
     func updateUIView(_ banner: BannerView, context: Context) {
-        // 寬度量到了、或變了才要一次廣告，不每次畫面更新都重要。
-        guard width > 0, context.coordinator.loadedWidth != width else { return }
+        // 這頁看得到、寬度量到了、或寬度變了才要一次廣告，不每次畫面更新都重要。
+        guard isActive, width > 0, context.coordinator.loadedWidth != width else { return }
         context.coordinator.loadedWidth = width
         banner.adSize = currentOrientationAnchoredAdaptiveBanner(width: width)
         banner.rootViewController = Self.rootViewController
@@ -97,8 +100,9 @@ private struct AdBanner: UIViewRepresentable {
         }
 
         func bannerView(_ bannerView: BannerView, didFailToReceiveAdWithError error: Error) {
-            // 沒網路或沒廣告可放：收起來，不留空白。
+            // 沒網路或沒廣告可放：收起來，不留空白。下次切回這頁再要一次。
             height.wrappedValue = 0
+            loadedWidth = 0
         }
     }
 }

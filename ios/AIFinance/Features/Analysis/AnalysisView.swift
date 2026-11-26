@@ -65,6 +65,8 @@ struct AnalysisView: View {
                     // 推進某一類的明細時不放，只放在分析頁本身。
                     if path.isEmpty { AdSlot() }
                 }
+                // 跟分頁列隔一點，不貼著。
+                .padding(.bottom, Gap.group)
                 .aboveTabBar()
             }
             .navigationDestination(for: CategoryPick.self) { CategoryDetailView(pick: $0) }
