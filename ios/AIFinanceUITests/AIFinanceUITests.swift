@@ -67,7 +67,12 @@ final class AIFinanceUITests: XCTestCase {
     private func showLedger() {
         let tab = app.buttons["tab_明細"]
         XCTAssertTrue(tab.waitForExistence(timeout: 30))
-        tab.tap()
+        // CI 的模擬器偶爾吃掉第一下（2026-11-27 截圖 93 還停在記一筆），沒選中就再點，最多三次。
+        for _ in 0..<3 {
+            tab.tap()
+            if tab.isSelected { break }
+            Thread.sleep(forTimeInterval: 1)
+        }
     }
 
     /// 按「記下」之後留在記一筆，表單清回空白。
