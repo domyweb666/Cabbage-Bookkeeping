@@ -362,10 +362,12 @@ struct CategoryIcon: View {
 /// 提示條的位置。每個會動到紀錄的畫面底部放一個。
 struct ToastSlot: View {
     @Environment(LedgerModel.self) private var model
+    /// 三頁常駐，藏起來那頁的提示條不出來，免得同一則提示有兩條、復原按鈕有兩顆。
+    @Environment(\.isCurrentPage) private var isCurrentPage
 
     var body: some View {
         Group {
-            if let toast = model.toast {
+            if isCurrentPage, let toast = model.toast {
                 HStack(spacing: Gap.group) {
                     Text(toast.message)
                         .font(Typo.subheadline.font)

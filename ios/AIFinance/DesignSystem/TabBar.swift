@@ -23,6 +23,11 @@ enum Page: Hashable, CaseIterable {
     }
 }
 
+extension EnvironmentValues {
+    /// 這一頁是不是現在選中的分頁。三頁常駐，藏起來的頁用它關掉只該出現一次的東西（提示條）。
+    @Entry var isCurrentPage = true
+}
+
 /// 下面的懸浮膠囊分頁列，照豆帳的樣子：離底部安全區多 12 點，比系統分頁列高、字大一號。
 /// 系統分頁列貼在最底，多米覺得太下面（QC-0015 #123）。
 struct TabBar: View {

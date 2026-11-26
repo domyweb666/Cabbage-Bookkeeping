@@ -84,6 +84,7 @@ private struct RootView: View {
     private func tab(_ which: Page, @ViewBuilder content: () -> some View) -> some View {
         let isOn = page == which
         return content()
+            .environment(\.isCurrentPage, isOn)
             .opacity(isOn ? 1 : 0)
             .allowsHitTesting(isOn)
             .accessibilityHidden(!isOn)
