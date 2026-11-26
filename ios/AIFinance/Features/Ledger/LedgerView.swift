@@ -93,7 +93,7 @@ struct LedgerView: View {
 
     @ViewBuilder
     private var summary: some View {
-        let report = model.report(month: model.today)
+        let report = model.home
         if report.budget == nil, !model.isEmpty {
             summaryWithoutBudget(report)
         } else {
@@ -102,7 +102,7 @@ struct LedgerView: View {
     }
 
     /// 還沒訂預算：右邊是訂預算的入口。
-    private func summaryWithoutBudget(_ report: MonthReport) -> some View {
+    private func summaryWithoutBudget(_ report: HomeFigures) -> some View {
         ViewThatFits(in: .horizontal) {
             HStack(spacing: Gap.group) {
                 spokenTotal(report)
@@ -117,7 +117,7 @@ struct LedgerView: View {
         }
     }
 
-    private func spokenTotal(_ report: MonthReport) -> some View {
+    private func spokenTotal(_ report: HomeFigures) -> some View {
         VStack(alignment: .leading, spacing: Gap.tight) {
             caption(Words.Ledger.monthTotal)
             monthAmount(report)
@@ -144,7 +144,7 @@ struct LedgerView: View {
         .accessibilityIdentifier("homeBudgetButton")
     }
 
-    private func summaryFigures(_ report: MonthReport) -> some View {
+    private func summaryFigures(_ report: HomeFigures) -> some View {
         // 標籤一排、數字一排才對得齊。字放大到一排放不下時，改成上下兩塊。
         ViewThatFits(in: .horizontal) {
             VStack(spacing: Gap.tight) {
@@ -186,7 +186,7 @@ struct LedgerView: View {
             .foregroundStyle(Theme.secondaryText)
     }
 
-    private func monthAmount(_ report: MonthReport) -> some View {
+    private func monthAmount(_ report: HomeFigures) -> some View {
         AmountText(text: Money.format(report.expense), value: report.expense, font: Typo.title1.font)
             .lineLimit(1)
             .minimumScaleFactor(0.6)

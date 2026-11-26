@@ -32,11 +32,19 @@ final class LedgerModel {
     private(set) var loadFailed = false
     /// 分類的名字、圖示、顯示哪些、順序。
     private(set) var book = CategoryBook()
+    /// 明細的每一天。紀錄變了才重排，不在每次重畫時排（效能，2026-11-26）。
+    private(set) var sections: [DaySection] = []
 
     @ObservationIgnored private let store: LocalStore
     @ObservationIgnored private(set) var days = Days.local
     /// 最後一次給小工具的。一樣就不再送。外層 nil 是還沒送過。
     @ObservationIgnored private var published: WidgetSnapshot??
+    /// 算過的數字。紀錄、預算、固定支出、分類、今天有一樣變了就整個丟掉（changed()）。
+    /// 一次重畫會問好幾次同一個月，資料沒變就不用每次從頭掃全部紀錄。
+    @ObservationIgnored private var reports: [String: MonthReport] = [:]
+    @ObservationIgnored private var cachedRecent: [MonthTotal]?
+    @ObservationIgnored private var cachedRange: UsualRange??
+    @ObservationIgnored private var cachedHome: HomeFigures?
 
     init(store: LocalStore) {
         self.store = store
@@ -54,6 +62,7 @@ final class LedgerModel {
         } catch {
             loadFailed = true
         }
+        changed()
         postFixed()
         publish()
     }
@@ -61,13 +70,13 @@ final class LedgerModel {
     func refreshToday() {
         days = Days.local
         today = AppConfig.current.today ?? days.day(of: Date())
+        changed()
         postFixed()
         publish()
     }
 
     // MARK: - 給畫面用的資料
 
-    var sections: [DaySection] { Timeline.sections(from: transactions) }
     var isEmpty: Bool { !transactions.contains { $0.deletedAt == nil } }
 
     func title(for day: String) -> String {
@@ -75,17 +84,44 @@ final class LedgerModel {
     }
 
     func report(month: String) -> MonthReport {
-        Analysis.report(
-            month: month, today: today, transactions: transactions, budgets: budgets, book: book, days: days, fixed: fixed
+        let key = days.monthStart(of: month)
+        if let saved = reports[key] { return saved }
+        let made = Analysis.report(
+            month: key, today: today, transactions: transactions, budgets: budgets, book: book, days: days, fixed: fixed
         )
+        reports[key] = made
+        return made
+    }
+
+    /// 記帳頁的本月支出與還能花。只算這兩個數字，不算分析頁的比較。
+    var home: HomeFigures {
+        if let cachedHome { return cachedHome }
+        let made = Analysis.homeFigures(today: today, transactions: transactions, budgets: budgets, fixed: fixed, days: days)
+        cachedHome = made
+        return made
     }
 
     var recentMonths: [MonthTotal] {
-        Analysis.recentMonths(today: today, transactions: transactions, days: days)
+        if let cachedRecent { return cachedRecent }
+        let made = Analysis.recentMonths(today: today, transactions: transactions, days: days)
+        cachedRecent = made
+        return made
     }
 
     var monthlyRange: UsualRange? {
-        Analysis.monthlyRange(today: today, transactions: transactions, days: days, fixed: fixed)
+        if let cachedRange { return cachedRange }
+        let made = Analysis.monthlyRange(today: today, transactions: transactions, days: days, fixed: fixed)
+        cachedRange = .some(made)
+        return made
+    }
+
+    /// 紀錄、預算、固定支出、分類或今天變了就呼叫：明細重排，算過的數字丟掉。
+    private func changed() {
+        sections = Timeline.sections(from: transactions)
+        reports = [:]
+        cachedRecent = nil
+        cachedRange = nil
+        cachedHome = nil
     }
 
     func category(of row: Txn) -> TxCategory { book.category(of: row) }
@@ -160,6 +196,7 @@ final class LedgerModel {
         do {
             try store.save(budget)
             budgets.append(budget)
+            changed()
             publish()
             Haptics.saved()
             return true
@@ -194,6 +231,7 @@ final class LedgerModel {
         do {
             try store.save(next)
             book = next
+            changed()
             return true
         } catch {
             Haptics.failed()
@@ -213,6 +251,7 @@ final class LedgerModel {
             toast = nil
             removeExports()
             book = CategoryBook()
+            changed()
             Preferences.reset()
             publish()
             return true
@@ -255,6 +294,7 @@ final class LedgerModel {
         } else {
             transactions.append(row)
         }
+        changed()
         publish()
         return true
     }
@@ -355,6 +395,7 @@ final class LedgerModel {
         } else {
             fixed.append(item)
         }
+        changed()
         publish()
         return true
     }
@@ -371,6 +412,7 @@ final class LedgerModel {
             return
         }
         transactions += rows
+        changed()
         publish()
         let names = rows.map { (title: title(of: $0), amount: $0.amount) }
         if let message = AnalysisText.posted(names) { show(Toast(message: message)) }
