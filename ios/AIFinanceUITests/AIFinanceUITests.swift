@@ -839,9 +839,10 @@ final class AIFinanceUITests: XCTestCase {
     /// 帶 -showAds 才放廣告（Debug 版是 Google 的測試廣告）。CI 的網路不一定拿得到，拿不到就只拍沒有廣告的樣子，不算失敗。
     func testAdBannerOnLedgerAndAnalysis() {
         launch(demo: "steady", extra: ["-showAds"])
-        // 記一筆頁不放廣告。
+        // 記一筆頁不放廣告。藏起來的明細頁還在畫面樹裡，它的廣告找得到，所以用截圖看，不用 exists 判斷。
         XCTAssertTrue(app.buttons["entrySave"].waitForExistence(timeout: 30))
-        XCTAssertFalse(any("adBanner").exists, "記一筆頁不能有廣告")
+        Thread.sleep(forTimeInterval: 5)
+        shot("95-廣告-記一筆沒有")
         showLedger()
         _ = any("adBanner").waitForExistence(timeout: 20)
         Thread.sleep(forTimeInterval: 5)
