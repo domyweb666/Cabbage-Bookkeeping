@@ -93,29 +93,15 @@ final class LocalStore {
         context.autosaveEnabled = false
     }
 
-    func transactions() throws -> [Txn] {
-        try context.fetch(FetchDescriptor<StoredTxn>()).map { try decoder.decode(Txn.self, from: $0.payload) }
-    }
+    /// 開 app 時讀全部用。拿去背景跑，自己開一個 context，不佔主執行緒。
+    var reader: StoreReader { StoreReader(container: container) }
 
-    func budgets() throws -> [Budget] {
-        try context.fetch(FetchDescriptor<StoredBudget>()).map { try decoder.decode(Budget.self, from: $0.payload) }
-    }
-
-    func fixedExpenses() throws -> [FixedExpense] {
-        try context.fetch(FetchDescriptor<StoredFixed>())
-            .map { try decoder.decode(FixedExpense.self, from: $0.payload) }
-            .sorted { $0.createdAt < $1.createdAt }
-    }
-
+    func transactions() throws -> [Txn] { try StoreReader.transactions(context, decoder) }
+    func budgets() throws -> [Budget] { try StoreReader.budgets(context, decoder) }
+    func fixedExpenses() throws -> [FixedExpense] { try StoreReader.fixedExpenses(context, decoder) }
     /// 存過的帳本，刪掉的也在。沒存過「我的帳本」的話這裡沒有它，由 Ledgers.alive 補上。
-    func ledgers() throws -> [Ledger] {
-        try context.fetch(FetchDescriptor<StoredLedger>()).map { try decoder.decode(Ledger.self, from: $0.payload) }
-    }
-
-    func savingsGoals() throws -> [SavingsGoal] {
-        try context.fetch(FetchDescriptor<StoredSavings>())
-            .map { try decoder.decode(SavingsGoal.self, from: $0.payload) }
-    }
+    func ledgers() throws -> [Ledger] { try StoreReader.ledgers(context, decoder) }
+    func savingsGoals() throws -> [SavingsGoal] { try StoreReader.savingsGoals(context, decoder) }
 
     func save(_ ledger: Ledger) throws {
         try upsert(ledger)
@@ -143,10 +129,7 @@ final class LocalStore {
     }
 
     /// 沒存過就是預設的樣子。
-    func categoryBook() throws -> CategoryBook {
-        guard let row = try context.fetch(FetchDescriptor<StoredCategoryBook>()).first else { return CategoryBook() }
-        return try decoder.decode(CategoryBook.self, from: row.payload).cleaned()
-    }
+    func categoryBook() throws -> CategoryBook { try StoreReader.categoryBook(context, decoder) }
 
     func save(_ book: CategoryBook) throws {
         let payload = try encoder.encode(book)
@@ -248,5 +231,61 @@ final class LocalStore {
             context.rollback()
             throw error
         }
+    }
+}
+
+/// 開 app 時一次讀到的全部資料。
+struct SavedData: @unchecked Sendable {
+    var transactions: [Txn]
+    var budgets: [Budget]
+    var fixed: [FixedExpense]
+    var book: CategoryBook
+    var ledgers: [Ledger]
+    var goals: [SavingsGoal]
+}
+
+/// 只讀不寫。ModelContainer 可以跨執行緒，context 不行，所以每次讀都在呼叫的那條執行緒上新開一個。
+struct StoreReader: @unchecked Sendable {
+    let container: ModelContainer
+
+    func readAll() throws -> SavedData {
+        let context = ModelContext(container)
+        let decoder = JSONDecoder()
+        return SavedData(
+            transactions: try Self.transactions(context, decoder),
+            budgets: try Self.budgets(context, decoder),
+            fixed: try Self.fixedExpenses(context, decoder),
+            book: try Self.categoryBook(context, decoder),
+            ledgers: try Self.ledgers(context, decoder),
+            goals: try Self.savingsGoals(context, decoder)
+        )
+    }
+
+    static func transactions(_ context: ModelContext, _ decoder: JSONDecoder) throws -> [Txn] {
+        try context.fetch(FetchDescriptor<StoredTxn>()).map { try decoder.decode(Txn.self, from: $0.payload) }
+    }
+
+    static func budgets(_ context: ModelContext, _ decoder: JSONDecoder) throws -> [Budget] {
+        try context.fetch(FetchDescriptor<StoredBudget>()).map { try decoder.decode(Budget.self, from: $0.payload) }
+    }
+
+    static func fixedExpenses(_ context: ModelContext, _ decoder: JSONDecoder) throws -> [FixedExpense] {
+        try context.fetch(FetchDescriptor<StoredFixed>())
+            .map { try decoder.decode(FixedExpense.self, from: $0.payload) }
+            .sorted { $0.createdAt < $1.createdAt }
+    }
+
+    static func ledgers(_ context: ModelContext, _ decoder: JSONDecoder) throws -> [Ledger] {
+        try context.fetch(FetchDescriptor<StoredLedger>()).map { try decoder.decode(Ledger.self, from: $0.payload) }
+    }
+
+    static func savingsGoals(_ context: ModelContext, _ decoder: JSONDecoder) throws -> [SavingsGoal] {
+        try context.fetch(FetchDescriptor<StoredSavings>())
+            .map { try decoder.decode(SavingsGoal.self, from: $0.payload) }
+    }
+
+    static func categoryBook(_ context: ModelContext, _ decoder: JSONDecoder) throws -> CategoryBook {
+        guard let row = try context.fetch(FetchDescriptor<StoredCategoryBook>()).first else { return CategoryBook() }
+        return try decoder.decode(CategoryBook.self, from: row.payload).cleaned()
     }
 }

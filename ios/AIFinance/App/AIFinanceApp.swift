@@ -5,13 +5,20 @@ import VeggieKit
 
 @main
 struct AIFinanceApp: App {
-    @State private var model: LedgerModel?
+    @State private var boot: Boot
+
+    /// 開 app 的三個樣子：資料還在背景讀、讀好了、資料庫打不開。
+    private enum Boot {
+        case loading(LocalStore)
+        case ready(LedgerModel)
+        case failed
+    }
 
     init() {
         let config = AppConfig.current
         // 紀錄存在這支手機上，這份資料庫打不開就不能假裝沒事繼續記。
         guard let store = try? LocalStore(inMemory: config.inMemory) else {
-            _model = State(initialValue: nil)
+            _boot = State(initialValue: .failed)
             return
         }
         if let demo = config.demo {
@@ -24,24 +31,38 @@ struct AIFinanceApp: App {
         // 畫面測試互不影響：設定從頭開始，要的話連手機上的資料庫也清掉。
         if config.inMemory { Preferences.forget() }
         if config.wipe { try? store.wipe() }
-        _model = State(initialValue: LedgerModel(store: store))
+        // 紀錄多的時候解全部資料要一段時間，放背景讀，主執行緒先把畫面畫出來（效能清單第 4 項）。
+        _boot = State(initialValue: .loading(store))
+    }
+
+    private func load(_ store: LocalStore) async {
+        let reader = store.reader
+        let saved = await Task.detached(priority: .userInitiated) {
+            Result { try reader.readAll() }
+        }.value
+        boot = .ready(LedgerModel(store: store, saved: saved))
     }
 
     var body: some Scene {
         WindowGroup {
             Group {
-                if let model {
+                switch boot {
+                case .ready(let model):
                     RootView()
                         .environment(model)
-                        .onOpenURL { url in
-                            // 小工具按下去的網址。認得這一個，其他不理。
-                            if url.scheme == Shared.scheme, url.host() == Shared.entryHost {
-                                EntryRequest.shared.ask()
-                            }
-                        }
-                } else {
+                case .loading(let store):
+                    // 只有底色，一下子就換掉。不放「還沒有紀錄」，免得有紀錄的人先看到空的。
+                    Theme.background.ignoresSafeArea()
+                        .task { await load(store) }
+                case .failed:
                     EmptyMessage(title: Words.Failure.storeTitle, message: Words.Failure.storeMessage)
                         .background(Theme.background.ignoresSafeArea())
+                }
+            }
+            .onOpenURL { url in
+                // 小工具按下去的網址。認得這一個，其他不理。還在讀資料時也先記著，畫面出來就開。
+                if url.scheme == Shared.scheme, url.host() == Shared.entryHost {
+                    EntryRequest.shared.ask()
                 }
             }
             .tint(Theme.accent)
