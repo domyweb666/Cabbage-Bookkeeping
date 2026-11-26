@@ -55,6 +55,8 @@ struct CalendarModeView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .card()
+        // 先標成容器，卡片的編號才不會蓋掉裡面每一格、答案句自己的編號。
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("calendarCard")
     }
 
