@@ -3,6 +3,17 @@
 > 更新：2026-11-26｜分支 main（7b92f47，PR #6 併進來的）
 > 舊的交接檔備份在 .vibe/handoff/archive/（上一版 HANDOFF-2026-11-25-1740.md）
 
+## features-1126（2026-11-26 下午，進行中）
+
+- qc-0015 已跟 perf-1126 一起由 PR #6 併進 main。多米回了 7 題（DECISIONS 第 54 點），說「開工」。分支 features-1126 從 main 0c8de9f 開出。
+- 四個子代理同時在做，各管各的檔，規則在 C:\Users\fcharlie\AppData\Local\Claude-Data\claude_pzs8sxrjxfjjc\side-session-notes\local_31ff1b8c-970b-4e50-9921-17f1dbc77d10\features-1126-共同規則.md：
+  - 畫布：A–J 區分頁列換新（只動畫布）
+  - P：改一筆收據照片＋記一筆掃發票 QR（EntrySheet、project.yml 相機權限、FinanceCore InvoiceQR、ReceiptInvoiceTests）
+  - A：分析頁四種看法切換（一句話／還能花／月曆／圓餅）（Features/Analysis、Analysis.swift、AnalysisModesTests）
+  - L：多帳本（K4 K5 標題旁切換、設定帳本清單）＋存錢目標自動算三處（資料層、LedgerView、Settings、小工具、LedgersSavingsTests）
+- 子代理不 commit。全部回來後：補共用檔（AnalysisView 插 SavingsCard 等，看各回報）、提交指定檔名、`git push -u origin features-1126`、`gh workflow run CI --ref features-1126`、看截圖 60、70、80 起。
+- 之後：iCloud 共享帳本＋成員（資料層換 CKSyncEngine 或 Core Data，要多米在後台開 iCloud）。出 TestFlight 要多米說。
+
 ## QC-0015（2026-11-26）
 
 - 改好、在 qc-0015：#115 常用分類拿掉排序（拖曳、編輯畫面的前後移都拿掉）；#116 #117 常用分類改四欄格子，點一下放進拿出，長按編輯；#123 #124 分頁列改自畫懸浮膠囊（DesignSystem/TabBar.swift，照豆帳），順序設定－記帳－分析；#126 備註欄筆圖示＋看分類問一句（Words.Entry.notePrompt）。
