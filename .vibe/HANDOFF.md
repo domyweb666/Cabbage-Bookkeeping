@@ -3,6 +3,13 @@
 > 更新：2026-11-26｜分支 main（7b92f47，PR #6 併進來的）
 > 舊的交接檔備份在 .vibe/handoff/archive/（上一版 HANDOFF-2026-11-25-1740.md）
 
+## 2026-11-27 下午 sheet-entry（還沒併 main）
+
+- 多米真機回饋四件：記一筆分頁打備註時版面跳（錄影）、換白菜錢包圖示（原檔 .uiux/圖示/）、分頁列改回原生、記一筆改回彈出且開 app 自動彈；另外分析頁底部被懸浮分頁列擋住。
+- 做法：原生 TabView 三頁（設定、明細、分析，預設明細），EntrySheet 只剩 .new／.edit，RootView 開 app 自動彈、離開超過 5 分鐘回來也彈；明細底部恢復「記一筆」按鈕。自畫 TabBar、aboveTabBar、tabBarTop 全拿掉。畫面測試帶 -noAutoEntry 不自動彈。
+- CI 45972328181 全綠，截圖看過：分析頁捲到底「開始存錢」整張露出、彈出視窗打備註版面正常。
+- 下一步：多米點頭再併 main、出 TestFlight（7）。
+
 ## 2026-11-27 TestFlight 0.2.0（6）正式廣告
 
 - 多米給了 AdMob 編號（App ID ca-app-pub-7643759977011671~4296546530、橫幅 ca-app-pub-7643759977011671/5226484829），寫進 ios/project.yml，CI 45934597130 全綠，TestFlight run 45940036643 上傳（6）。註冊步驟在 docs/AdMob註冊指南.md；上架後要連商店、放 app-ads.txt、Google 審過廣告才穩定。
