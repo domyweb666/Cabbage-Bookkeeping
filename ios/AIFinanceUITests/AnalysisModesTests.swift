@@ -12,6 +12,8 @@ final class AnalysisModesTests: XCTestCase {
         app.launchArguments = [
             "-memoryStore", "-slowToast", "-today", "2026-11-25",
             "-AppleLanguages", "(zh-Hant)", "-AppleLocale", "zh_TW",
+            // 開 app 不自動彈記一筆，直接切到分析。
+            "-noAutoEntry",
         ]
     }
 
@@ -40,8 +42,15 @@ final class AnalysisModesTests: XCTestCase {
         return XCTWaiter.wait(for: [expectation], timeout: timeout) == .completed
     }
 
+    /// 系統原生分頁列的「分析」。CI 的模擬器偶爾吃掉第一下，沒選中就再點，最多三次。
     private func openAnalysis() {
-        app.buttons["tab_分析"].tap()
+        let tab = app.tabBars.buttons["分析"]
+        XCTAssertTrue(tab.waitForExistence(timeout: 30))
+        for _ in 0..<3 {
+            tab.tap()
+            if tab.isSelected { break }
+            Thread.sleep(forTimeInterval: 1)
+        }
         XCTAssertTrue(any("analysisTotal").waitForExistence(timeout: 30))
     }
 

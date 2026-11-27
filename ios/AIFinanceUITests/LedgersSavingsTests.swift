@@ -11,6 +11,8 @@ final class LedgersSavingsTests: XCTestCase {
         app.launchArguments = [
             "-memoryStore", "-slowToast", "-today", "2026-11-25",
             "-AppleLanguages", "(zh-Hant)", "-AppleLocale", "zh_TW",
+            // 開 app 不自動彈記一筆，從明細開始，要記帳就按底部那顆。
+            "-noAutoEntry",
         ]
     }
 
@@ -61,18 +63,28 @@ final class LedgersSavingsTests: XCTestCase {
         for key in keys { app.buttons["key_\(key)"].tap() }
     }
 
-    /// 開 app 停在記一筆；要看月份、總額卡、換帳本、存錢那一條，先點分頁列的「明細」。
-    private func showLedger() {
-        let tab = app.buttons["tab_明細"]
+    /// 點系統原生分頁列的一頁（設定、明細、分析），沒選中就再點，最多三次。
+    private func showTab(_ label: String) {
+        let tab = app.tabBars.buttons[label]
         XCTAssertTrue(tab.waitForExistence(timeout: 30))
-        tab.tap()
+        for _ in 0..<3 {
+            tab.tap()
+            if tab.isSelected { break }
+            Thread.sleep(forTimeInterval: 1)
+        }
     }
 
-    /// 到記一筆分頁記一筆支出或收入，記好回明細看。
+    /// 月份、總額卡、換帳本、存錢那一條在「明細」分頁。
+    private func showLedger() {
+        showTab("明細")
+    }
+
+    /// 在明細按底部「記一筆」記一筆支出或收入，記下後視窗收起來、回到明細。
     private func record(_ keys: [String], category: String, income: Bool = false) {
-        let tab = app.buttons["tab_記一筆"]
-        XCTAssertTrue(tab.waitForExistence(timeout: 30))
-        tab.tap()
+        showLedger()
+        let add = app.buttons["addButton"]
+        XCTAssertTrue(add.waitForExistence(timeout: 30))
+        add.tap()
         XCTAssertTrue(app.buttons["entrySave"].waitForExistence(timeout: 30))
         if income {
             app.buttons["收入"].tap()
@@ -81,8 +93,8 @@ final class LedgersSavingsTests: XCTestCase {
         for key in keys { press(key) }
         app.buttons["category_\(category)"].tap()
         app.buttons["entrySave"].tap()
+        XCTAssertTrue(disappears(app.buttons["entrySave"]), "記下之後記一筆收起來")
         XCTAssertTrue(wait("toastText", contains: "記好了"))
-        showLedger()
     }
 
     /// 選單裡的一本（標題開頭是帳本名，後面可能接這個月的金額）。
@@ -91,8 +103,7 @@ final class LedgersSavingsTests: XCTestCase {
     }
 
     private func openLedgers() {
-        XCTAssertTrue(app.buttons["tab_設定"].waitForExistence(timeout: 30))
-        app.buttons["tab_設定"].tap()
+        showTab("設定")
         let entry = app.buttons["ledgersRow"]
         XCTAssertTrue(entry.waitForExistence(timeout: 30))
         entry.tap()
@@ -160,8 +171,7 @@ final class LedgersSavingsTests: XCTestCase {
     /// 從設定開始存錢；還沒有收入時說怎麼開始算；記一筆收入後明細頁那一條跟著變。
     func testSavingsGoalFollowsIncome() {
         launch()
-        XCTAssertTrue(app.buttons["tab_設定"].waitForExistence(timeout: 30))
-        app.buttons["tab_設定"].tap()
+        showTab("設定")
         let entry = app.buttons["savingsRow"]
         XCTAssertTrue(entry.waitForExistence(timeout: 30))
         XCTAssertTrue(wait("savingsRow", contains: "還沒開始"))

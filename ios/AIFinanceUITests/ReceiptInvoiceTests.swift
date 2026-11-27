@@ -15,6 +15,8 @@ final class ReceiptInvoiceTests: XCTestCase {
         app.launchArguments = [
             "-memoryStore", "-slowToast", "-today", "2026-11-25",
             "-AppleLanguages", "(zh-Hant)", "-AppleLocale", "zh_TW",
+            // 開 app 不自動彈記一筆，從明細開始，要記帳就按底部那顆。
+            "-noAutoEntry",
         ]
     }
 
@@ -40,19 +42,24 @@ final class ReceiptInvoiceTests: XCTestCase {
         return app.buttons.containing(NSPredicate(format: format, argumentArray: fragments)).firstMatch
     }
 
-    /// 記一筆是常駐的分頁：點分頁列的「記一筆」，等「記下」出現。
+    /// 記一筆是彈出視窗：到明細按底部「記一筆」，等「記下」出現。
     private func openEntry() {
-        let tab = app.buttons["tab_記一筆"]
-        XCTAssertTrue(tab.waitForExistence(timeout: 30))
-        tab.tap()
+        showLedger()
+        let add = app.buttons["addButton"]
+        XCTAssertTrue(add.waitForExistence(timeout: 30))
+        add.tap()
         XCTAssertTrue(app.buttons["entrySave"].waitForExistence(timeout: 30))
     }
 
-    /// 開 app 停在記一筆；要點明細上的一列，先點分頁列的「明細」。
+    /// 點系統原生分頁列的「明細」，沒選中就再點，最多三次。
     private func showLedger() {
-        let tab = app.buttons["tab_明細"]
+        let tab = app.tabBars.buttons["明細"]
         XCTAssertTrue(tab.waitForExistence(timeout: 30))
-        tab.tap()
+        for _ in 0..<3 {
+            tab.tap()
+            if tab.isSelected { break }
+            Thread.sleep(forTimeInterval: 1)
+        }
     }
 
     private func disappears(_ element: XCUIElement, timeout: TimeInterval = 10) -> Bool {
@@ -78,13 +85,14 @@ final class ReceiptInvoiceTests: XCTestCase {
         Thread.sleep(forTimeInterval: 1)
         shot("61-記一筆-掃到發票")
         app.buttons["entrySave"].tap()
+        XCTAssertTrue(disappears(app.buttons["entrySave"]), "記下之後記一筆收起來")
 
-        // 日期填的是上個月，提示才不會講「這個月共」。
+        // 提示條在明細上。日期填的是上個月，提示才不會講「這個月共」。
         XCTAssertTrue(wait("toastText", contains: "記好了。飲食 NT$110"), "日期要填發票那天")
 
-        // 記下之後留在記一筆、表單清空，直接再掃一次。
+        // 再開一次記一筆（新的、空白的），再掃同一張。
         openEntry()
-        XCTAssertFalse(any("entryAmount").label.contains("110"), "記下之後金額清空")
+        XCTAssertFalse(any("entryAmount").label.contains("110"), "新開的記一筆金額是空的")
         app.buttons["scanInvoice"].tap()
         let alert = app.alerts["這張發票記過了"]
         XCTAssertTrue(alert.waitForExistence(timeout: 10))
