@@ -3,6 +3,12 @@
 > 更新：2026-11-26｜分支 main（7b92f47，PR #6 併進來的）
 > 舊的交接檔備份在 .vibe/handoff/archive/（上一版 HANDOFF-2026-11-25-1740.md）
 
+## 2026-11-27 TestFlight 0.2.0（5）
+
+- 多米說先出 TestFlight：entry-home 快轉併進 main（3cd434d，含 features-1126、整晚、記一筆主頁、廣告），run 45932556496 上傳成功。這版沒有正式 AdMob 編號，不出廣告。
+- 畫布加 L 區（L1 記一筆沒廣告、L2 明細＋橫幅、L3 分析＋橫幅），沒在畫布上看過。
+- 多米問 App ID：AdMob 不用等上架，新增 app 選「未上架」就拿得到；上架後再連商店，審過正式廣告才穩定。等他給編號。
+
 ## entry-home（2026-11-26 晚上）
 
 - 多米：記一筆要自己一頁、開 app 就能記。分支 entry-home 從 overnight-20261126-1104 開出（含整晚的修正，都還沒併 features-1126／main）。
