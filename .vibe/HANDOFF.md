@@ -9,7 +9,8 @@
 - 分頁改四個：設定－記一筆－明細－分析，預設停在記一筆。記下後留在原地清回空白，填了才有「清空」。明細頁拿掉「記一筆」按鈕，改一筆仍是彈出視窗。小工具、控制中心改成切到記一筆分頁。
 - 坑：分頁內的 NavigationStack 拿不到分頁列讓出的空間，數字鍵最下排被蓋，用 aboveTabBar 墊；藏起來的分頁 XCUITest 還找得到（accessibilityHidden 沒用），記一筆切走時整頁換成 Color.clear。
 - CI 45832457147 全綠，截圖 02、05 看過。代價：12 個分類時格子只露兩排半，要捲。
-- 廣告：.uiux/廣告方案-2026-11-26.md，等多米選位置、個人化與否、給 AdMob 編號。程式沒動。
+- 廣告（2026-11-27 多米說照推薦做）：明細、分析頁底部 AdMob 橫幅，只要非個人化（npa=1），不跳追蹤詢問。程式在 ios/AIFinance/Features/Ads/AdBanner.swift。Debug 用 Google 測試編號；Info.plist 的 GADApplicationIdentifier 現在是測試 App ID、BaicaiBannerUnitID 空的，所以正式版／TestFlight 不出廣告，等多米給 AdMob 編號（docs/上架指南.md 最後一節第 13、14 項）。畫面測試預設不放廣告，-showAds 才放（截圖 93、94）。隱私權政策、上架指南的隱私標籤已改。CI 45911240297 全綠。
+- 坑：藏起來的分頁在開 app 時就先要廣告會拿不到，改成分頁看得到才要（isCurrentPage）。
 
 ## features-1126（2026-11-26 下午，進行中）
 
