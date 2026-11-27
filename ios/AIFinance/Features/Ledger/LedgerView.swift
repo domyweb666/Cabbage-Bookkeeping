@@ -2,7 +2,7 @@ import FinanceCore
 import SwiftUI
 import UIKit
 
-/// 明細分頁：月份、本月支出、每天的明細。記一筆在自己的分頁（2026-11-26 起），這頁不再放那顆按鈕。
+/// 明細分頁：月份、本月支出、每天的明細、底部一顆「記一筆」（2026-11-27 改回彈出視窗）。
 /// 有兩本以上的帳時，月份旁邊多一顆換帳本；有在存錢時，總額卡下面多一條存錢。
 struct LedgerView: View {
     @Environment(LedgerModel.self) private var model
@@ -43,10 +43,23 @@ struct LedgerView: View {
             VStack(spacing: Gap.group) {
                 ToastSlot()
                     .padding(.horizontal, Gap.screenMargin)
+                Button {
+                    model.refreshToday()
+                    EntryRequest.shared.ask()
+                } label: {
+                    Label(Words.Ledger.add, systemImage: "plus")
+                        .frame(maxWidth: .infinity, minHeight: Metric.button)
+                        .primaryFill()
+                        .clipShape(Capsule())
+                }
+                .buttonStyle(.press)
+                .disabled(model.loadFailed)
+                .accessibilityIdentifier("addButton")
+                .padding(.horizontal, Gap.screenMargin)
                 AdSlot()
             }
-            .padding(.bottom, Gap.group)
-            .aboveTabBar()
+            .padding(.vertical, Gap.group)
+            .background(Theme.background)
         }
         .sheet(item: $editing) { EntrySheet(mode: .edit($0)) }
         .sheet(isPresented: $showBudget) { BudgetSheet() }

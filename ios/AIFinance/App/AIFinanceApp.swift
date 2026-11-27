@@ -77,67 +77,75 @@ struct AIFinanceApp: App {
     }
 }
 
-/// 四個分頁：設定、記一筆、明細、分析，開 app 停在記一筆。分頁列自己畫（DesignSystem/TabBar.swift），
-/// 前三頁都留著，切過去狀態還在（記一筆填到一半切走再回來，數字還在）。
+/// 三個分頁：設定、明細、分析，系統原生分頁列，開 app 停在明細。
+/// 記一筆是彈出視窗：開 app 自動彈出來（多米 2026-11-27），離開超過 5 分鐘再回來也會彈；明細頁底部也有一顆。
 private struct RootView: View {
     @Environment(LedgerModel.self) private var model
     @Environment(\.scenePhase) private var scenePhase
 
-    @State private var page: Page = .entry
-    /// 打備註時鍵盤升起來，分頁列先收起來，不然會被頂到鍵盤上面、擠掉備註欄。
-    @State private var keyboardUp = false
-    /// 分頁列上緣，給設定頁推進去的子頁面把底部按鈕墊高（aboveTabBar）。
-    @State private var tabBarTop: CGFloat = .infinity
+    @State private var page: Page = .ledger
+    @State private var showEntry = false
+    /// 什麼時候退到背景。離開夠久再回來，當作「重新打開」，自動彈記一筆。
+    @State private var leftAt: Date?
+
+    /// 離開多久回來算重新打開。短短切去別的 app 看一下再回來，不打斷正在看的頁面。
+    private static let reopenAfter: TimeInterval = 5 * 60
 
     var body: some View {
-        ZStack {
-            tab(.settings) { SettingsView() }
-            tab(.entry) { EntrySheet(mode: .page) }
-            tab(.ledger) { LedgerView() }
-            // 分析頁每次記帳都會重算報表，沒選中就不放進畫面，切過來才建（它的 onAppear 會順便更新今天）。
-            if page == .analysis {
-                tab(.analysis) { AnalysisView() }
+        TabView(selection: $page) {
+            SettingsView()
+                .environment(\.isCurrentPage, page == .settings)
+                .tabItem { Label(Words.Tab.settings, systemImage: "gearshape.fill") }
+                .tag(Page.settings)
+            LedgerView()
+                .environment(\.isCurrentPage, page == .ledger)
+                .tabItem { Label(Words.Tab.ledger, systemImage: "list.bullet") }
+                .tag(Page.ledger)
+            // 分析頁每次記帳都會重算報表，沒選中就不建，切過來才建（它的 onAppear 會順便更新今天）。
+            Group {
+                if page == .analysis {
+                    AnalysisView()
+                } else {
+                    Theme.background.ignoresSafeArea()
+                }
             }
+            .environment(\.isCurrentPage, page == .analysis)
+            .tabItem { Label(Words.Tab.analysis, systemImage: "chart.bar.fill") }
+            .tag(Page.analysis)
         }
-        .environment(\.tabBarTop, tabBarTop)
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            if !keyboardUp {
-                TabBar(page: $page)
-                    .onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).minY } action: { tabBarTop = $0 }
-            }
+        .sheet(isPresented: $showEntry) { EntrySheet(mode: .new) }
+        .onAppear {
+            if AppConfig.current.autoEntry, !model.loadFailed { EntryRequest.shared.ask() }
+            openEntryIfAsked()
         }
-        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
-            keyboardUp = true
-        }
-        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
-            keyboardUp = false
-        }
-        .onAppear(perform: openEntryIfAsked)
         .onChange(of: EntryRequest.shared.asked) { _, asked in
             if asked { openEntryIfAsked() }
         }
         .onChange(of: scenePhase) { _, phase in
-            if phase == .active { model.refreshToday() }
+            switch phase {
+            case .background:
+                leftAt = Date()
+            case .active:
+                model.refreshToday()
+                if let leftAt, Date().timeIntervalSince(leftAt) >= Self.reopenAfter,
+                   AppConfig.current.autoEntry, !model.loadFailed {
+                    EntryRequest.shared.ask()
+                }
+                leftAt = nil
+            default:
+                break
+            }
         }
     }
 
-    /// 設定、記一筆、明細沒選中時藏起來、不給點、讀螢幕也略過，但不拆掉，填到一半的數字和捲動位置才留得住。
-    private func tab(_ which: Page, @ViewBuilder content: () -> some View) -> some View {
-        let isOn = page == which
-        return content()
-            .environment(\.isCurrentPage, isOn)
-            .opacity(isOn ? 1 : 0)
-            .allowsHitTesting(isOn)
-            .accessibilityHidden(!isOn)
-    }
-
-    /// 小工具或控制中心要求記一筆：切到記一筆分頁。已經有別的畫面開著就不打斷，免得填到一半的不見。
+    /// 要開記一筆（開 app、小工具、控制中心、明細頁那顆）。已經有別的畫面開著就不打斷，免得填到一半的不見。
     private func openEntryIfAsked() {
         let request = EntryRequest.shared
         guard request.asked else { return }
         request.asked = false
-        guard !hasPresentedScreen else { return }
-        page = .entry
+        guard !showEntry, !hasPresentedScreen else { return }
+        model.refreshToday()
+        showEntry = true
     }
 
     private var hasPresentedScreen: Bool {

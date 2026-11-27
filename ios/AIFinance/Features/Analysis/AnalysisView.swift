@@ -67,7 +67,6 @@ struct AnalysisView: View {
                 }
                 // 跟分頁列隔一點，不貼著。
                 .padding(.bottom, Gap.group)
-                .aboveTabBar()
             }
             .navigationDestination(for: CategoryPick.self) { CategoryDetailView(pick: $0) }
             .sheet(isPresented: $showBudget) { BudgetSheet() }

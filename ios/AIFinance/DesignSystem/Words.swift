@@ -23,7 +23,6 @@ enum Words {
     static let currency = "NT$"
 
     enum Tab {
-        static let entry = "記一筆"
         static let ledger = "明細"
         static let analysis = "分析"
         static let settings = "設定"
@@ -53,7 +52,7 @@ enum Words {
 
         static let undo = "復原"
         static let emptyTitle = "還沒有紀錄"
-        static let emptyMessage = "到下面的「記一筆」分頁，按金額、點分類就好。"
+        static let emptyMessage = "按下面的「記一筆」，選金額和分類就好。"
         static let delete = "刪除"
         static let otherCategory = "其他"
         static let oneOff = "一次性"
@@ -66,7 +65,6 @@ enum Words {
     }
 
     enum Entry {
-        static let clear = "清空"
         static let kind = "類型"
         static let save = "記下"
         static let backspace = "退格"

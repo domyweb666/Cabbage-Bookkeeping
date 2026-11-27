@@ -2,19 +2,17 @@ import FinanceCore
 import SwiftUI
 
 /// 記一筆：按金額、點分類、記下。改一筆也用同一個畫面。
-/// page 是常駐的「記一筆」分頁（多米 2026-11-26：開 app 就能記，不用先按一下），記下後留在原地、清回空白。
+/// 多米 2026-11-27：記一筆改回彈出視窗（常駐分頁太擠、打備註時版面會跳），開 app 時自動彈出來。
 struct EntrySheet: View {
     enum Mode: Hashable {
+        case new
         case edit(Txn)
-        case page
     }
 
     @Environment(LedgerModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.isCurrentPage) private var isCurrentPage
-    @Environment(\.tabBarTop) private var tabBarTop
     let mode: Mode
 
     @State private var type: TxType = .expense
@@ -56,13 +54,6 @@ struct EntrySheet: View {
 
     private var canSave: Bool { form.fields != nil }
 
-    private var isPage: Bool { mode == .page }
-
-    /// 分頁上有沒有填東西。只切支出收入不算，那不用清。
-    private var hasInput: Bool {
-        pad.value != 0 || categoryId != nil || !note.isEmpty || isOneOff
-    }
-
     /// 動過的內容不給滑掉，要走就按「取消」。
     private var isDirty: Bool {
         guard let opened else { return false }
@@ -73,16 +64,6 @@ struct EntrySheet: View {
     private var latestDate: Date { model.days.date(of: model.today) ?? Date() }
 
     var body: some View {
-        // 分頁切走時整頁換成空的：填到一半的數字存在上面的 @State，回來還在；
-        // 改一筆的視窗打開時，畫面上也不會藏著第二組數字鍵、分類格（2026-11-26 CI 撞到兩顆 key_back）。
-        if isPage, !isCurrentPage {
-            Color.clear
-        } else {
-            screen
-        }
-    }
-
-    private var screen: some View {
         NavigationStack {
             VStack(spacing: 0) {
                 amount
@@ -127,21 +108,9 @@ struct EntrySheet: View {
                     Keypad(pad: $pad, canSave: canSave, onSave: save)
                         .padding(.horizontal, Gap.screenMargin)
                         .padding(.vertical, Gap.group)
-                        // 分頁上：最下排按鍵和「記下」會被懸浮分頁列蓋住，被蓋多少墊多少。
-                        // 改一筆是彈出來的視窗，蓋在分頁列上面，不用墊。
-                        .aboveTabBar()
-                        .environment(\.tabBarTop, isPage ? tabBarTop : .infinity)
                 }
             }
             .background(Theme.background.ignoresSafeArea())
-            // 分頁上記下後的提示條（含復原），蓋在金額卡那一排，不推動下面的格子和鍵盤。
-            .overlay(alignment: .top) {
-                if isPage {
-                    ToastSlot()
-                        .padding(.horizontal, Gap.screenMargin)
-                        .padding(.top, Gap.item)
-                }
-            }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { toolbar }
             .confirmationDialog(Words.Entry.deleteTitle, isPresented: $confirmDelete, titleVisibility: .visible) {
@@ -183,10 +152,6 @@ struct EntrySheet: View {
                 .tint(Theme.accent)
         }
         .onAppear(perform: load)
-        // 分頁一直開著，過了午夜回來，沒填東西的話日期跟著換成今天。
-        .onChange(of: model.today) { _, _ in
-            if isPage, !hasInput { date = latestDate }
-        }
         // 填的時候先叫醒震動，按「記下」那一下才準時。叫醒只維持幾秒，所以每動一次叫一次。
         .onChange(of: form) { _, _ in Haptics.prepareSaved() }
         .onChange(of: type) { _, newType in
@@ -224,16 +189,8 @@ struct EntrySheet: View {
     @ToolbarContentBuilder
     private var toolbar: some ToolbarContent {
         ToolbarItem(placement: .cancellationAction) {
-            if isPage {
-                // 分頁沒有地方可以「取消」回去，填了東西才給一顆清空。
-                if hasInput {
-                    Button(Words.Entry.clear) { reset() }
-                        .accessibilityIdentifier("entryClear")
-                }
-            } else {
-                Button(Words.cancel) { dismiss() }
-                    .accessibilityIdentifier("entryCancel")
-            }
+            Button(Words.cancel) { dismiss() }
+                .accessibilityIdentifier("entryCancel")
         }
         ToolbarItem(placement: .principal) {
             Picker(Words.Entry.kind, selection: $type) {
@@ -438,23 +395,7 @@ struct EntrySheet: View {
             // 紀錄已經存好了。這份只用來提醒重複，寫不進去也不擋人，下次掃到同一張只是不會提醒。
             _ = try? InvoiceLog.shared.record(invoice)
         }
-        if isPage {
-            reset()
-        } else {
-            dismiss()
-        }
-    }
-
-    /// 分頁記下或按清空：回到空白，支出收入維持剛剛選的，連記好幾筆收入不用每次切。
-    private func reset() {
-        noteFocused = false
-        invoice = nil
-        pad = AmountPad()
-        categoryId = nil
-        note = ""
-        isOneOff = false
-        date = latestDate
-        opened = EntryForm(type: type, amount: 0, occurredOn: model.today, categoryId: nil, note: "", isOneOff: false)
+        dismiss()
     }
 
     /// 按「掃發票」。畫面測試沒有相機，帶了 -invoiceQR 就當作掃到那串。

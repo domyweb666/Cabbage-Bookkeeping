@@ -17,6 +17,8 @@ struct AppConfig {
     let toastSeconds: UInt64
     /// 放不放廣告。畫面測試（資料放記憶體）預設不放，截圖才不會跟著廣告變；要看廣告帶 -showAds。
     let showsAds: Bool
+    /// 開 app 時自動彈出記一筆。畫面測試要從別頁開始時帶 -noAutoEntry 關掉。
+    let autoEntry: Bool
 
     static let current: AppConfig = {
         #if DEBUG
@@ -37,7 +39,8 @@ struct AppConfig {
             forceDark: arguments.contains("-forceDark"),
             today: value(after: "-today"),
             toastSeconds: arguments.contains("-slowToast") ? 60 : 5,
-            showsAds: !inMemory || arguments.contains("-showAds")
+            showsAds: !inMemory || arguments.contains("-showAds"),
+            autoEntry: !arguments.contains("-noAutoEntry")
         )
     }()
 }

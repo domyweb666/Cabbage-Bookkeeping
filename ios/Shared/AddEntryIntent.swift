@@ -2,7 +2,7 @@ import AppIntents
 import Observation
 
 /// 從 App 外面要求打開「記一筆」。
-/// asked 由 RootView 接：沒有別的畫面開著就切到記一筆分頁。
+/// asked 由 RootView 接：沒有別的畫面開著就彈出記一筆。
 @MainActor
 @Observable
 final class EntryRequest {
