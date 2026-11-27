@@ -58,10 +58,10 @@ targets:
         CFBundleURLTypes:
           - CFBundleURLName: org.domyweb.baicai
             CFBundleURLSchemes: [baicai]
-        # AdMob。現在是 Google 公開的測試 App ID，送審前換成多米 AdMob 後台那組（docs/上架指南.md 廣告一節）。
-        GADApplicationIdentifier: ca-app-pub-3940256099942544~1458002511
-        # 正式橫幅編號。空的就不出廣告（Debug 版一律用測試編號）。
-        BaicaiBannerUnitID: ""
+        # AdMob（多米的帳戶，2026-11-27 建）。App ID 跟著 app 出去，本來就公開。
+        GADApplicationIdentifier: ca-app-pub-7643759977011671~4296546530
+        # 正式橫幅編號（明細、分析頁共用）。空的就不出廣告；Debug 版一律用 Google 測試編號。
+        BaicaiBannerUnitID: ca-app-pub-7643759977011671/5226484829
         # 只放非個人化廣告，不跳追蹤詢問，所以沒有 NSUserTrackingUsageDescription。
         SKAdNetworkItems:
           - SKAdNetworkIdentifier: cstr6suwn9.skadnetwork
