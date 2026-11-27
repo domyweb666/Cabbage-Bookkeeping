@@ -3,6 +3,10 @@
 > 更新：2026-11-26｜分支 main（7b92f47，PR #6 併進來的）
 > 舊的交接檔備份在 .vibe/handoff/archive/（上一版 HANDOFF-2026-11-25-1740.md）
 
+## 2026-11-27 TestFlight 0.2.0（6）正式廣告
+
+- 多米給了 AdMob 編號（App ID ca-app-pub-7643759977011671~4296546530、橫幅 ca-app-pub-7643759977011671/5226484829），寫進 ios/project.yml，CI 45934597130 全綠，TestFlight run 45940036643 上傳（6）。註冊步驟在 docs/AdMob註冊指南.md；上架後要連商店、放 app-ads.txt、Google 審過廣告才穩定。
+
 ## 2026-11-27 TestFlight 0.2.0（5）
 
 - 多米說先出 TestFlight：entry-home 快轉併進 main（3cd434d，含 features-1126、整晚、記一筆主頁、廣告），run 45932556496 上傳成功。這版沒有正式 AdMob 編號，不出廣告。
