@@ -166,12 +166,33 @@ private struct RootView: View {
     }
 
     /// 記一筆那格的圖：實心主色圓配白色加號，不跟著分頁列的灰色走，一眼看得到（照多米貼的參考圖）。
+    /// 自己畫成點陣圖：給系統符號的話，分頁列會用符號自帶的多彩樣式重畫成綠色（2026-11-28 CI 截圖）。
+    /// 淺色、深色各畫一張，掛在同一個 imageAsset 上，跟著外觀換。
     private static let entryIcon: UIImage = {
-        let config = UIImage.SymbolConfiguration(pointSize: 26, weight: .semibold)
-            .applying(UIImage.SymbolConfiguration(paletteColors: [.white, UIColor(Theme.accent)]))
-        let image = UIImage(systemName: "plus.circle.fill", withConfiguration: config) ?? UIImage()
-        return image.withRenderingMode(.alwaysOriginal)
+        let light = UITraitCollection(userInterfaceStyle: .light)
+        let dark = UITraitCollection(userInterfaceStyle: .dark)
+        let lightImage = drawEntryIcon(UIColor(Theme.accent).resolvedColor(with: light), plus: .white)
+        let darkImage = drawEntryIcon(UIColor(Theme.accent).resolvedColor(with: dark), plus: .black)
+        let asset = UIImageAsset()
+        asset.register(lightImage, with: light)
+        asset.register(darkImage, with: dark)
+        return asset.image(with: .current).withRenderingMode(.alwaysOriginal)
     }()
+
+    private static func drawEntryIcon(_ fill: UIColor, plus: UIColor) -> UIImage {
+        let side: CGFloat = 30
+        let image = UIGraphicsImageRenderer(size: CGSize(width: side, height: side)).image { _ in
+            fill.setFill()
+            UIBezierPath(ovalIn: CGRect(x: 0, y: 0, width: side, height: side)).fill()
+            let arm: CGFloat = 13
+            let thick: CGFloat = 3
+            let mid = side / 2
+            plus.setFill()
+            UIBezierPath(roundedRect: CGRect(x: mid - arm / 2, y: mid - thick / 2, width: arm, height: thick), cornerRadius: thick / 2).fill()
+            UIBezierPath(roundedRect: CGRect(x: mid - thick / 2, y: mid - arm / 2, width: thick, height: arm), cornerRadius: thick / 2).fill()
+        }
+        return image.withRenderingMode(.alwaysOriginal)
+    }
 
     /// 要開記一筆（開 app、小工具、控制中心、分頁列那格）。已經有別的畫面開著就不打斷，免得填到一半的不見。
     private func openEntryIfAsked() {
