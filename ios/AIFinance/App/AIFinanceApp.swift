@@ -83,6 +83,7 @@ struct AIFinanceApp: App {
 private struct RootView: View {
     @Environment(LedgerModel.self) private var model
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.colorScheme) private var colorScheme
 
     @State private var page: Page = .ledger
     @State private var showEntry = false
@@ -104,7 +105,7 @@ private struct RootView: View {
                     Label {
                         Text(Words.Tab.entry)
                     } icon: {
-                        Image(uiImage: Self.entryIcon)
+                        Image(uiImage: entryIcon)
                     }
                 }
                 .tag(Page.entry)
@@ -165,27 +166,26 @@ private struct RootView: View {
         }
     }
 
-    /// 記一筆那格的圖：實心主色圓配白色加號，不跟著分頁列的灰色走，一眼看得到（照多米貼的參考圖）。
+    /// 記一筆那格的圖：實心主色圓配加號，不跟著分頁列的灰色走，一眼看得到（照多米貼的參考圖）。
     /// 自己畫成點陣圖：給系統符號的話，分頁列會用符號自帶的多彩樣式重畫成綠色（2026-11-28 CI 截圖）。
-    /// 淺色、深色各畫一張，掛在同一個 imageAsset 上，跟著外觀換。
-    private static let entryIcon: UIImage = {
-        let light = UITraitCollection(userInterfaceStyle: .light)
-        let dark = UITraitCollection(userInterfaceStyle: .dark)
-        let lightImage = drawEntryIcon(UIColor(Theme.accent).resolvedColor(with: light), plus: .white)
-        let darkImage = drawEntryIcon(UIColor(Theme.accent).resolvedColor(with: dark), plus: .black)
-        let asset = UIImageAsset()
-        asset.register(lightImage, with: light)
-        asset.register(darkImage, with: dark)
-        return asset.image(with: .current).withRenderingMode(.alwaysOriginal)
-    }()
+    /// 淺色、深色各一張，照外觀挑。不用 UIImageAsset，它會把倍率弄丟、圖變三倍大。
+    private static let entryIconLight = drawEntryIcon(
+        UIColor(Theme.accent).resolvedColor(with: UITraitCollection(userInterfaceStyle: .light)), plus: .white)
+    private static let entryIconDark = drawEntryIcon(
+        UIColor(Theme.accent).resolvedColor(with: UITraitCollection(userInterfaceStyle: .dark)),
+        plus: UIColor(Theme.onAccent).resolvedColor(with: UITraitCollection(userInterfaceStyle: .dark)))
+
+    private var entryIcon: UIImage { colorScheme == .dark ? Self.entryIconDark : Self.entryIconLight }
 
     private static func drawEntryIcon(_ fill: UIColor, plus: UIColor) -> UIImage {
-        let side: CGFloat = 30
-        let image = UIGraphicsImageRenderer(size: CGSize(width: side, height: side)).image { _ in
+        let side: CGFloat = 26
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 3
+        let image = UIGraphicsImageRenderer(size: CGSize(width: side, height: side), format: format).image { _ in
             fill.setFill()
             UIBezierPath(ovalIn: CGRect(x: 0, y: 0, width: side, height: side)).fill()
-            let arm: CGFloat = 13
-            let thick: CGFloat = 3
+            let arm: CGFloat = 12
+            let thick: CGFloat = 2.5
             let mid = side / 2
             plus.setFill()
             UIBezierPath(roundedRect: CGRect(x: mid - arm / 2, y: mid - thick / 2, width: arm, height: thick), cornerRadius: thick / 2).fill()
