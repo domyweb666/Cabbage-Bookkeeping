@@ -79,10 +79,10 @@ final class LedgersSavingsTests: XCTestCase {
         showTab("明細")
     }
 
-    /// 在明細按底部「記一筆」記一筆支出或收入，記下後視窗收起來、回到明細。
+    /// 點分頁列「記一筆」記一筆支出或收入，記下後視窗收起來、回到明細。
     private func record(_ keys: [String], category: String, income: Bool = false) {
         showLedger()
-        let add = app.buttons["addButton"]
+        let add = app.tabBars.buttons["記一筆"]
         XCTAssertTrue(add.waitForExistence(timeout: 30))
         add.tap()
         XCTAssertTrue(app.buttons["entrySave"].waitForExistence(timeout: 30))

@@ -77,8 +77,9 @@ struct AIFinanceApp: App {
     }
 }
 
-/// 三個分頁：設定、明細、分析，系統原生分頁列，開 app 停在明細。
-/// 記一筆是彈出視窗：開 app 自動彈出來（多米 2026-11-27），離開超過 5 分鐘再回來也會彈；明細頁底部也有一顆。
+/// 分頁列四格：設定、記一筆、明細、分析，系統原生分頁列，開 app 停在明細。
+/// 記一筆那格是醒目的實心圓，點了彈出記一筆視窗，記下後切到明細（多米 2026-11-28）。
+/// 開 app 也自動彈出來（2026-11-27），離開超過 5 分鐘再回來也會彈。
 private struct RootView: View {
     @Environment(LedgerModel.self) private var model
     @Environment(\.scenePhase) private var scenePhase
@@ -92,11 +93,21 @@ private struct RootView: View {
     private static let reopenAfter: TimeInterval = 5 * 60
 
     var body: some View {
-        TabView(selection: $page) {
+        TabView(selection: selection) {
             SettingsView()
                 .environment(\.isCurrentPage, page == .settings)
                 .tabItem { Label(Words.Tab.settings, systemImage: "gearshape.fill") }
                 .tag(Page.settings)
+            // 不是一頁，選不到：點了只彈記一筆視窗，分頁停在原本那頁。
+            Theme.background.ignoresSafeArea()
+                .tabItem {
+                    Label {
+                        Text(Words.Tab.entry)
+                    } icon: {
+                        Image(uiImage: Self.entryIcon)
+                    }
+                }
+                .tag(Page.entry)
             LedgerView()
                 .environment(\.isCurrentPage, page == .ledger)
                 .tabItem { Label(Words.Tab.ledger, systemImage: "list.bullet") }
@@ -113,7 +124,9 @@ private struct RootView: View {
             .tabItem { Label(Words.Tab.analysis, systemImage: "chart.bar.fill") }
             .tag(Page.analysis)
         }
-        .sheet(isPresented: $showEntry) { EntrySheet(mode: .new) }
+        .sheet(isPresented: $showEntry) {
+            EntrySheet(mode: .new) { page = .ledger }
+        }
         .onAppear {
             if AppConfig.current.autoEntry, !model.loadFailed { EntryRequest.shared.ask() }
             openEntryIfAsked()
@@ -138,7 +151,29 @@ private struct RootView: View {
         }
     }
 
-    /// 要開記一筆（開 app、小工具、控制中心、明細頁那顆）。已經有別的畫面開著就不打斷，免得填到一半的不見。
+    /// 點分頁列：記一筆那格只彈視窗，不切過去。
+    private var selection: Binding<Page> {
+        Binding {
+            page
+        } set: { picked in
+            if picked == .entry {
+                Haptics.selected()
+                EntryRequest.shared.ask()
+            } else {
+                page = picked
+            }
+        }
+    }
+
+    /// 記一筆那格的圖：實心主色圓配白色加號，不跟著分頁列的灰色走，一眼看得到（照多米貼的參考圖）。
+    private static let entryIcon: UIImage = {
+        let config = UIImage.SymbolConfiguration(pointSize: 26, weight: .semibold)
+            .applying(UIImage.SymbolConfiguration(paletteColors: [.white, UIColor(Theme.accent)]))
+        let image = UIImage(systemName: "plus.circle.fill", withConfiguration: config) ?? UIImage()
+        return image.withRenderingMode(.alwaysOriginal)
+    }()
+
+    /// 要開記一筆（開 app、小工具、控制中心、分頁列那格）。已經有別的畫面開著就不打斷，免得填到一半的不見。
     private func openEntryIfAsked() {
         let request = EntryRequest.shared
         guard request.asked else { return }

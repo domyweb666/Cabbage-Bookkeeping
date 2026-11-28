@@ -2,7 +2,7 @@ import FinanceCore
 import SwiftUI
 import UIKit
 
-/// 明細分頁：月份、本月支出、每天的明細、底部一顆「記一筆」（2026-11-27 改回彈出視窗）。
+/// 明細分頁：月份、本月支出、每天的明細。記一筆在分頁列（2026-11-28）。點月份跳月曆查某一天。
 /// 有兩本以上的帳時，月份旁邊多一顆換帳本；有在存錢時，總額卡下面多一條存錢。
 struct LedgerView: View {
     @Environment(LedgerModel.self) private var model
@@ -13,6 +13,7 @@ struct LedgerView: View {
     @State private var showBudget = false
     @State private var showNewLedger = false
     @State private var showSavings = false
+    @State private var showDayLookup = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -43,19 +44,6 @@ struct LedgerView: View {
             VStack(spacing: Gap.group) {
                 ToastSlot()
                     .padding(.horizontal, Gap.screenMargin)
-                Button {
-                    model.refreshToday()
-                    EntryRequest.shared.ask()
-                } label: {
-                    Label(Words.Ledger.add, systemImage: "plus")
-                        .frame(maxWidth: .infinity, minHeight: Metric.button)
-                        .primaryFill()
-                        .clipShape(Capsule())
-                }
-                .buttonStyle(.press)
-                .disabled(model.loadFailed)
-                .accessibilityIdentifier("addButton")
-                .padding(.horizontal, Gap.screenMargin)
                 AdSlot()
             }
             .padding(.vertical, Gap.group)
@@ -65,6 +53,7 @@ struct LedgerView: View {
         .sheet(isPresented: $showBudget) { BudgetSheet() }
         .sheet(isPresented: $showNewLedger) { LedgerEditView(ledger: nil) }
         .sheet(isPresented: $showSavings) { savingsSheet }
+        .sheet(isPresented: $showDayLookup) { DayLookupSheet() }
     }
 
     /// 現在是哪個月。固定在上面，總額那張卡跟著捲。兩本以上時右邊是換帳本那顆，字放大排不下就放到下一排。
@@ -92,18 +81,32 @@ struct LedgerView: View {
         .padding(.bottom, Gap.group)
     }
 
+    /// 點一下跳月曆，查某一天花了多少。旁邊的小箭頭讓人看得出點得下去。
     private var monthTitle: some View {
-        HStack(alignment: .firstTextBaseline, spacing: Gap.item) {
-            Text(Days.shortMonth(of: model.today))
-                .font(Typo.largeTitle.font)
-                .foregroundStyle(Theme.primaryText)
-            Text(String(model.today.prefix(4)))
-                .font(Typo.subheadline.font)
-                .foregroundStyle(Theme.secondaryText)
+        Button {
+            model.refreshToday()
+            showDayLookup = true
+        } label: {
+            HStack(alignment: .firstTextBaseline, spacing: Gap.item) {
+                Text(Days.shortMonth(of: model.today))
+                    .font(Typo.largeTitle.font)
+                    .foregroundStyle(Theme.primaryText)
+                Text(String(model.today.prefix(4)))
+                    .font(Typo.subheadline.font)
+                    .foregroundStyle(Theme.secondaryText)
+                Image(systemName: "chevron.down")
+                    .font(Typo.subheadline.font.weight(.semibold))
+                    .foregroundStyle(Theme.accent)
+            }
+            .contentShape(Rectangle())
         }
+        .buttonStyle(.press)
+        .disabled(model.loadFailed)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(model.days.monthTitle(of: model.today))
-        .accessibilityAddTraits(.isHeader)
+        .accessibilityHint(Words.DayLookup.openHint)
+        .accessibilityAddTraits([.isHeader, .isButton])
+        .accessibilityIdentifier("monthTitle")
     }
 
     @ViewBuilder

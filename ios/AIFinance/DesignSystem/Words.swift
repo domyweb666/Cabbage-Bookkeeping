@@ -23,6 +23,7 @@ enum Words {
     static let currency = "NT$"
 
     enum Tab {
+        static let entry = "記一筆"
         static let ledger = "明細"
         static let analysis = "分析"
         static let settings = "設定"

@@ -14,6 +14,8 @@ struct EntrySheet: View {
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let mode: Mode
+    /// 記下之後要做的事。分頁列的記一筆用它切回明細（多米 2026-11-28）。
+    var onSaved: () -> Void = {}
 
     @State private var type: TxType = .expense
     @State private var pad = AmountPad()
@@ -395,6 +397,7 @@ struct EntrySheet: View {
             // 紀錄已經存好了。這份只用來提醒重複，寫不進去也不擋人，下次掃到同一張只是不會提醒。
             _ = try? InvoiceLog.shared.record(invoice)
         }
+        onSaved()
         dismiss()
     }
 

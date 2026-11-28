@@ -42,10 +42,10 @@ final class ReceiptInvoiceTests: XCTestCase {
         return app.buttons.containing(NSPredicate(format: format, argumentArray: fragments)).firstMatch
     }
 
-    /// 記一筆是彈出視窗：到明細按底部「記一筆」，等「記下」出現。
+    /// 記一筆是彈出視窗：點分頁列的「記一筆」，等「記下」出現。
     private func openEntry() {
         showLedger()
-        let add = app.buttons["addButton"]
+        let add = app.tabBars.buttons["記一筆"]
         XCTAssertTrue(add.waitForExistence(timeout: 30))
         add.tap()
         XCTAssertTrue(app.buttons["entrySave"].waitForExistence(timeout: 30))

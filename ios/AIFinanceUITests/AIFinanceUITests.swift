@@ -58,7 +58,7 @@ final class AIFinanceUITests: XCTestCase {
         return XCTWaiter.wait(for: [expectation], timeout: timeout) == .completed
     }
 
-    /// 系統原生分頁列的一顆（設定、明細、分析）。
+    /// 系統原生分頁列的一顆（設定、記一筆、明細、分析）。
     private func tab(_ label: String) -> XCUIElement {
         app.tabBars.buttons[label]
     }
@@ -79,10 +79,10 @@ final class AIFinanceUITests: XCTestCase {
         showTab("明細")
     }
 
-    /// 記一筆是彈出視窗：到明細按底部「記一筆」，等「記下」出現。
+    /// 記一筆是彈出視窗：點分頁列的「記一筆」，等「記下」出現。
     private func openEntry() {
         showLedger()
-        let add = app.buttons["addButton"]
+        let add = app.tabBars.buttons["記一筆"]
         XCTAssertTrue(add.waitForExistence(timeout: 30))
         add.tap()
         XCTAssertTrue(app.buttons["entrySave"].waitForExistence(timeout: 30))
@@ -97,7 +97,7 @@ final class AIFinanceUITests: XCTestCase {
     /// 按「記下」之後視窗收起來，回到明細。
     private func entryClosed() {
         XCTAssertTrue(disappears(app.buttons["entrySave"]), "記下之後記一筆要收起來")
-        XCTAssertTrue(app.buttons["addButton"].waitForExistence(timeout: 10), "收起來後回到明細")
+        XCTAssertTrue(app.buttons["monthTitle"].waitForExistence(timeout: 10), "收起來後回到明細")
     }
 
     private func press(_ keys: String...) {
@@ -346,16 +346,52 @@ final class AIFinanceUITests: XCTestCase {
         XCTAssertTrue(shows("還沒有紀錄"))
     }
 
-    /// 帶 -noAutoEntry 開 app：停在明細，不彈記一筆；分頁列是原生的三頁。
+    /// 帶 -noAutoEntry 開 app：停在明細，不彈記一筆；分頁列四格設定、記一筆、明細、分析。
     func testNoAutoEntryStaysOnLedger() {
         launch()
-        XCTAssertTrue(app.buttons["addButton"].waitForExistence(timeout: 30))
+        XCTAssertTrue(app.buttons["monthTitle"].waitForExistence(timeout: 30))
         XCTAssertFalse(app.buttons["entrySave"].waitForExistence(timeout: 5), "帶 -noAutoEntry 不自動彈出")
         XCTAssertTrue(tab("明細").isSelected, "開 app 停在明細")
-        XCTAssertEqual(app.tabBars.buttons.count, 3, "分頁只有設定、明細、分析")
+        XCTAssertEqual(app.tabBars.buttons.count, 4, "分頁列四格")
         XCTAssertTrue(tab("設定").exists)
+        XCTAssertTrue(tab("記一筆").exists)
         XCTAssertTrue(tab("分析").exists)
-        XCTAssertFalse(tab("記一筆").exists, "記一筆不是分頁")
+        shot("99-分頁列-記一筆醒目")
+    }
+
+    /// 在設定頁點分頁列的記一筆：彈出視窗、分頁不切過去；記下後回到明細。
+    func testEntryTabFromSettingsLandsOnLedger() {
+        launch()
+        showTab("設定")
+        tab("記一筆").tap()
+        XCTAssertTrue(app.buttons["entrySave"].waitForExistence(timeout: 30), "點記一筆要彈出視窗")
+        XCTAssertFalse(app.tabBars.firstMatch.isHittable, "記一筆視窗蓋住分頁列")
+        press("6", "0")
+        app.buttons["category_飲食"].tap()
+        app.buttons["entrySave"].tap()
+        entryClosed()
+        XCTAssertTrue(tab("明細").isSelected, "記下後切到明細")
+        XCTAssertTrue(row("飲食", "NT$60").waitForExistence(timeout: 10))
+    }
+
+    /// 點明細左上的月份跳月曆，看得到某一天的每一筆和總共。
+    func testMonthTitleOpensDayLookup() {
+        launch(demo: "steady")
+        let title = app.buttons["monthTitle"]
+        XCTAssertTrue(title.waitForExistence(timeout: 30))
+        title.tap()
+        XCTAssertTrue(app.buttons["dayLookupDone"].waitForExistence(timeout: 30), "要跳出查某一天")
+        XCTAssertTrue(wait("dayLookupHeader", contains: "筆"), "今天有紀錄，標題寫幾筆、花多少")
+        shot("100-查某一天-今天")
+        // 點月曆上的 24 號（標籤依語系不同，找含「24」的那顆）。
+        let day24 = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "24")).firstMatch
+        if day24.waitForExistence(timeout: 5) {
+            day24.tap()
+            XCTAssertTrue(wait("dayLookupHeader", contains: "筆"), "24 號也有紀錄")
+            shot("101-查某一天-點24號")
+        }
+        app.buttons["dayLookupDone"].tap()
+        XCTAssertTrue(disappears(app.buttons["dayLookupDone"]))
     }
 
     // MARK: - 分析
